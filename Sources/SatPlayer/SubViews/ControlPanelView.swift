@@ -67,10 +67,14 @@ class ControlPanelView: UIView {
     // header
     
     // Control Button
-    private lazy var btnReverse = UIButton()
-        .image(loadImage(named: "backward")!.withRenderingMode(.alwaysTemplate), for: .normal)
-        .tintColor(.white)
-    
+    private lazy var btnReverse: UIButton = {
+        let btn = UIButton()
+            .image(loadImage(named: "backward")!.withRenderingMode(.alwaysTemplate), for: .normal)
+            .tintColor(.white)
+        btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        return btn
+    }()
+
     private lazy var btnPlay = UIButton()
         .image(loadImage(named: "play")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
@@ -84,9 +88,19 @@ class ControlPanelView: UIView {
         .cornerRadius(24)
         .isHidden(true)
     
-    private lazy var btnForward = UIButton()
-        .image(loadImage(named: "forward")!.withRenderingMode(.alwaysTemplate), for: .normal)
-        .tintColor(.white)
+    
+    private lazy var btnForward: UIButton = {
+        let btn = UIButton()
+            .image(loadImage(named: "forward")!.withRenderingMode(.alwaysTemplate), for: .normal)
+            .tintColor(.white)
+        btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        return btn
+    }()
+    
+    private lazy var btnStack = UIStackView(arrangedSubviews: [btnReverse, btnPlay, btnPause, btnForward])
+        .axis(.horizontal)
+        .spacing(32)
+        .alignment(.center)
     // Control Button
     
     // footer
@@ -95,11 +109,12 @@ class ControlPanelView: UIView {
         .font(.systemFont(ofSize: 12))
         .textColor(.white)
     
-    lazy var sliderBar: UISlider = {
-        let sb = UISlider()
+    lazy var sliderBar: BufferSlider = {
+        let sb = BufferSlider()
         sb.tintColor = #colorLiteral(red: 0, green: 0.3607843137, blue: 1, alpha: 1)
+        sb.minimumValue = 0
+        sb.maximumValue = 1
         sb.minimumTrackTintColor = #colorLiteral(red: 0.2, green: 0.4901960784, blue: 1, alpha: 1)
-        sb.maximumTrackTintColor = .white
         sb.setThumbImage(loadImage(named: "sliderThumb")!, for: .normal)
         sb.addTarget(self, action: #selector(handleSliderValueChange(_:)), for: .valueChanged)
         return sb
@@ -148,6 +163,10 @@ class ControlPanelView: UIView {
         sliderBar.value = Float(currentTimeInSecond / durationTimeInSecond)
         lbCurrentDuration.text = "\(Int(currentTimeInSecond).secondToMS())"
     }
+    
+    func updateBufferProgress(bufferProgress: Float) {
+        sliderBar.bufferProgress = bufferProgress
+    }
 }
 
 // MARK: - Private Helpers
@@ -173,11 +192,6 @@ private extension ControlPanelView {
         // Header
 
         // Control Button
-        let btnStack = UIStackView(arrangedSubviews: [btnReverse, btnPlay, btnPause, btnForward])
-            .axis(.horizontal)
-            .spacing(32)
-            .alignment(.center)
-
         addSubview(btnStack)
         btnPlay.snp.makeConstraints({
             $0.size.equalTo(48)
@@ -226,6 +240,7 @@ private extension ControlPanelView {
                     $0.left.equalToSuperview().inset(12)
                     $0.right.equalTo(self.btnFullScreen.snp.left).offset(-12)
                 })
+                btnStack.spacing = 32
             case .landscapeLeft, .landscapeRight:
                 btnSetting.snp.remakeConstraints({
                     $0.top.equalToSuperview().inset(20)
@@ -245,6 +260,7 @@ private extension ControlPanelView {
                     $0.left.equalToSuperview().inset(60)
                     $0.right.equalTo(self.btnFullScreen.snp.left).offset(-12)
                 })
+                btnStack.spacing = 100
             default:
                 break
             }
