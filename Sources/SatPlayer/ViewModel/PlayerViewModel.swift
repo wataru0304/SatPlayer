@@ -11,13 +11,10 @@ import UIKit
 import AVFoundation
 
 class PlayerViewModel {
-    
-    var controlPanelAutoHidden = true
-    
     var playStatus = BehaviorRelay<PlayStatus>(value: .pause)
     var isLoading = BehaviorRelay<Bool>(value: false)
     var deviceOrientation = BehaviorRelay<UIInterfaceOrientation>(value: .portrait)
-    var isControlHidden = BehaviorRelay<Bool>(value: false)
+    var isControlHidden = BehaviorRelay<Bool>(value: true)
     var orientation = BehaviorRelay<UIDeviceOrientation>(value: .portrait)
     var seekTime = BehaviorRelay<CMTime>(value: CMTime())
     var vttUrl = PublishRelay<String?>()
