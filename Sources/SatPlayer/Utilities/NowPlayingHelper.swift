@@ -97,7 +97,6 @@ class NowPlayingHelper {
         
         commandCenter.nextTrackCommand.addTarget { [weak self] event in
             guard let self = self else { return .commandFailed }
-            print("next!!!!!!")
             self.delegate?.nextTrack()
             return .success
         }
