@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 enum PlayStatus {
     case play
@@ -27,14 +28,14 @@ enum TimeJumpType {
 public struct PlayerConfiguration {
     public let videoUrl: String
     public let videoTitle: String
-    public let videoImageUrl: String
+    public let videoImage: UIImage
     public let teacherName: String
-    public let defaultSeekTime: Float
+    public let defaultSeekTime: Int
     
-    public init(videoUrl: String, videoTitle: String, videoImageUrl: String, teacherName: String, defaultSeekTime: Float) {
+    public init(videoUrl: String, videoTitle: String, videoImage: UIImage, teacherName: String, defaultSeekTime: Int) {
         self.videoUrl = videoUrl
         self.videoTitle = videoTitle
-        self.videoImageUrl = videoImageUrl
+        self.videoImage = videoImage
         self.teacherName = teacherName
         self.defaultSeekTime = defaultSeekTime
     }

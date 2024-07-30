@@ -55,22 +55,20 @@ class NowPlayingHelper {
         nowPlayingInfo[MPMediaItemPropertyArtist] = config.teacherName
         nowPlayingInfo[MPNowPlayingInfoPropertyMediaType] = NSNumber(value: MPNowPlayingInfoMediaType.audio.rawValue)
         
-        var videoImage = UIImage(named: "none") ?? UIImage()
-        if let url = URL(string: config.videoImageUrl), let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
-            videoImage = image
-        }
-        
+        var videoImage = config.videoImage
+//        if let url = URL(string: config.videoImageUrl), let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+//            videoImage = image
+//        }
+//        
         nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: videoImage.size) { _ in
             return videoImage
         }
         
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
-        
-        setupRemoteTransportControls()
     }
     
     // Configure media player click action
-    private func setupRemoteTransportControls() {
+    func setupRemoteTransportControls() {
         // Add handler for Play Command
         commandCenter.playCommand.addTarget { [weak self] event in
             guard let self = self else { return .commandFailed }

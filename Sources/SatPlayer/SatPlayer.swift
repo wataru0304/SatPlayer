@@ -35,7 +35,7 @@ public class SatPlayer: UIView {
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
     private var playerLayer = AVPlayerLayer()
-    private var defaultSeekTime: Float = 0.0
+    private var defaultSeekTime: Int = 0
     private var subtitles = [Subtitle]()
     private var nowPlayingHelper = NowPlayingHelper()
     
@@ -98,6 +98,7 @@ public class SatPlayer: UIView {
         // 註冊應用進入背景和返回前景的通知
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        nowPlayingHelper.setupRemoteTransportControls()
     }
     
     required init?(coder: NSCoder) {
@@ -121,7 +122,7 @@ public class SatPlayer: UIView {
             case .readyToPlay:
                 print("DEBUG: readyToPlay")
                 // 設定影片播放進度
-                setupDefaultSeekTime(defaultSeekTime: defaultSeekTime)
+                setupDefaultSeekTime(second: defaultSeekTime)
                 // 開始播放
                 viewModel.isLoading.accept(false)
                 play()
@@ -130,7 +131,7 @@ public class SatPlayer: UIView {
             case .failed:
                 print("DEBUG: failed")
             case .unknown:
-                print("DEBUG: unknown")
+                viewModel.isLoading.accept(true)                    
             case .none:
                 print("DEBUG: none")
             case .some(_):
@@ -190,16 +191,28 @@ public class SatPlayer: UIView {
     /// - defaultSeekTime: 影片播放進度
     public func setupDefaultSeekTime(defaultSeekTime: Float) {
         if defaultSeekTime > 0 {
-//            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                 self.controlPanel.sliderBar.setValue(defaultSeekTime, animated: true)
                 self.controlPanel.sliderBar.sendActions(for: .valueChanged)
-//            }
         }
+    }
+    
+    public func setupDefaultSeekTime(second: Int) {
+        player?.seek(to: CMTime(seconds: Double(second), preferredTimescale: CMTimeScale(NSEC_PER_SEC)))
+//        if defaultSeekTime > 0 {
+//                self.controlPanel.sliderBar.setValue(defaultSeekTime, animated: true)
+//                self.controlPanel.sliderBar.sendActions(for: .valueChanged)
+//        }
     }
     
     /// 取得當前播放進度
     public func getCurrentProgress() -> Float {
         return controlPanel.sliderBar.value
+    }
+    
+    public func getCurrentSecond() -> Int {
+        guard let currentTime = player?.currentTime() else { return 0 }
+        let currentTimeInSecond = CMTimeGetSeconds(currentTime)
+        return Int(ceilf((Float(currentTimeInSecond))))
     }
     
     /// 設定字幕檔案
@@ -212,7 +225,7 @@ public class SatPlayer: UIView {
     /// 切換影片畫質
     /// Parameters
     /// - url: 影片 url 
-    public func switchRendition(url: String, defaultSeekTime: Float) {
+    public func switchRendition(url: String, defaultSeekTime: Int) {
         self.defaultSeekTime = defaultSeekTime
         startLoading()
         setupVideoData(videoUrl: url)
@@ -247,6 +260,7 @@ public class SatPlayer: UIView {
         
         viewModel.isControlHidden.accept(true)
         viewModel.seekTime.accept(CMTime())
+        viewModel.vttUrl.accept(nil)
 
         // 清除 player data
         self.playerItem = nil
@@ -366,8 +380,7 @@ private extension SatPlayer {
             switch orientation {
             case .portrait:
                 UIView.animate(withDuration: 0.3) {
-                    self.frame = CGRect(x: 0, y: 40.paddingWithSafeArea(.top), width: UIScreen.main.bounds.width, height: 211.scale(.width))
-                    
+                    self.frame = CGRect(x: 0, y: 52.paddingWithSafeArea(.top), width: UIScreen.main.bounds.width, height: 211.scale(.width))
                 }
             case .landscapeLeft, .landscapeRight:
                 UIView.animate(withDuration: 0.3) {
@@ -408,7 +421,8 @@ private extension SatPlayer {
                 }
                 self.subtitleView.isHidden = false
             } else {
-                self.subTitleObserver = nil
+                self.subtitles = []
+                self.subtitleView.setSubtitle("")
                 self.subtitleView.isHidden = true
             }
         }).disposed(by: disposeBag)
@@ -502,7 +516,9 @@ private extension SatPlayer {
         let interval = CMTime(seconds: 1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: DispatchQueue.main, using: { elapsed in
             self.updatePlayerTime()
-            self.nowPlayingHelper.updateNowPlayingInfo(player: self.player!)
+            if let player = self.player {
+                self.nowPlayingHelper.updateNowPlayingInfo(player: player)
+            }
         })
     }
     
