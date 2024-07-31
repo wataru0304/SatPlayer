@@ -161,6 +161,18 @@ public class SatPlayer: UIView {
         // 設定鎖屏播放器資訊
         nowPlayingHelper.setNowPlayingInfo(config: config)
         nowPlayingHelper.delegate = self
+        
+        switch UIDevice.current.orientation {
+        case .portrait:
+            self.setDeviceOrientation(.portrait)
+        case .landscapeLeft:
+            self.setDeviceOrientation(.landscapeLeft)
+        case .landscapeRight:
+            self.setDeviceOrientation(.landscapeRight)
+        default:
+            break
+        }
+        
     }
     
     /// 設定影片Url
