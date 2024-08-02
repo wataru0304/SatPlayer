@@ -493,11 +493,11 @@ private extension SatPlayer {
         tap.numberOfTapsRequired = 1
         tap.delegate = self
         
-        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
-        doubleTap.numberOfTapsRequired = 2
-        doubleTap.delegate = self
+//        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+//        doubleTap.numberOfTapsRequired = 2
+//        doubleTap.delegate = self
                 
-        tap.require(toFail: doubleTap)
+//        tap.require(toFail: doubleTap)
         
         let press = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
         press.delegate = self
@@ -506,7 +506,7 @@ private extension SatPlayer {
         pan.delegate = self
         
         self.addGestureRecognizer(tap)
-        self.addGestureRecognizer(doubleTap)
+//        self.addGestureRecognizer(doubleTap)
         self.addGestureRecognizer(press)
         self.addGestureRecognizer(pan)
     }
