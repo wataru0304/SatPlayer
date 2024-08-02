@@ -422,6 +422,9 @@ private extension SatPlayer {
         viewModel.seekTime.subscribe(onNext: { [weak self] seekTime in
             guard let self = self, let player = self.player else { return }
             player.seek(to: seekTime)
+            if self.viewModel.playStatus.value == .pause {
+                self.viewModel.playStatus.accept(.play)
+            }
         }).disposed(by: disposeBag)
         
         viewModel.vttUrl.subscribe(onNext: { [weak self] vttUrl in
@@ -764,11 +767,11 @@ extension SatPlayer: NowPlayingHelperDelegate {
     }
     
     func seekTime(_ seekTime: CMTime) {
+        self.viewModel.playStatus.accept(.pause)
         self.viewModel.seekTime.accept(seekTime)
     }
     
     func nextTrack() {
-        print("DEBUG: next!!!")
         delegate?.nextTrack()
     }
     
