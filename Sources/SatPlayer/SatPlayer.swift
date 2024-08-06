@@ -85,6 +85,10 @@ public class SatPlayer: UIView {
         
     // Anthor control
     
+    deinit {
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
+    }
+    
     // MARK: - Lifecycle
     public override init(frame: CGRect) {
         super.init(frame: frame)
@@ -98,6 +102,7 @@ public class SatPlayer: UIView {
         // 註冊應用進入背景和返回前景的通知
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
         nowPlayingHelper.setupRemoteTransportControls()
     }
     
@@ -137,7 +142,6 @@ public class SatPlayer: UIView {
             case .some(_):
                 print("DEBUG: some")
             }
-            
         }
     }
     
@@ -172,7 +176,6 @@ public class SatPlayer: UIView {
         default:
             break
         }
-        
     }
     
     /// 設定影片Url
@@ -181,8 +184,7 @@ public class SatPlayer: UIView {
     public func setupVideoData(videoUrl: String) {
         // 設定影片資料
         playerItem = AVPlayerItem(
-            asset: AVAsset(url: URL(string: videoUrl)!),
-            automaticallyLoadedAssetKeys: [.tracks, .duration, .commonMetadata]
+            asset: AVAsset(url: URL(string: videoUrl)!)
         )
         
         playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
@@ -210,10 +212,6 @@ public class SatPlayer: UIView {
     
     public func setupDefaultSeekTime(second: Int) {
         player?.seek(to: CMTime(seconds: Double(second), preferredTimescale: CMTimeScale(NSEC_PER_SEC)))
-//        if defaultSeekTime > 0 {
-//                self.controlPanel.sliderBar.setValue(defaultSeekTime, animated: true)
-//                self.controlPanel.sliderBar.sendActions(for: .valueChanged)
-//        }
     }
     
     /// 取得當前播放進度
@@ -733,6 +731,51 @@ private extension SatPlayer {
                 break
             }
         }
+    }
+}
+
+// MARK: - AirPlay Control
+private extension SatPlayer {
+    // 監聽 AirPlay 切換事件
+    @objc func handleRouteChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
+            return
+        }
+        
+        viewModel.playStatus.accept(.pause)
+        setAirPlaySubtitle(show: isAirPlayConnected())
+    }
+    
+    // 判斷是否啟用 .m3u8 字幕
+    func setAirPlaySubtitle(show: Bool) {
+        guard let player = player, let currentItem = player.currentItem,
+              let legibleGroup = currentItem.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else { return }
+        if show {
+            if let option = legibleGroup.options.first {
+                currentItem.select(option, in: legibleGroup)
+            }
+        } else {
+            // 尝试禁用字幕
+            DispatchQueue.main.async {
+                currentItem.select(nil, in: legibleGroup)
+                let noSubtitlesOption = AVMediaSelectionOption()
+                currentItem.select(noSubtitlesOption, in: legibleGroup)
+            }
+        }
+        viewModel.playStatus.accept(.play)
+    }
+    
+    // 判斷當前是否啟用 AirPlay
+    func isAirPlayConnected() -> Bool {
+        let currentRoute = AVAudioSession.sharedInstance().currentRoute
+        for output in currentRoute.outputs {
+            if output.portType == .airPlay {
+                return true
+            }
+        }
+        return false
     }
 }
 
