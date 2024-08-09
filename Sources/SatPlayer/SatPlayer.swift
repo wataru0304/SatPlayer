@@ -161,7 +161,11 @@ public class SatPlayer: UIView {
         // 設定影片名稱
         controlPanel.setVideoTitle(config.videoTitle)
         // 設定影片
-        setupVideoData(videoUrl: config.videoUrl)
+        if let videoData = config.videoData {
+            setupLocalVideoData(data: videoData)
+        } else {
+            setupVideoData(videoUrl: config.videoUrl)
+        }
         // 設定鎖屏播放器資訊
         nowPlayingHelper.setNowPlayingInfo(config: config)
         nowPlayingHelper.delegate = self
@@ -177,6 +181,44 @@ public class SatPlayer: UIView {
             break
         }
     }
+    
+    private func setupLocalVideoData(data: Data) {
+        if let fileURL = saveDataToTemporaryFile(data: data, fileName: "temporary_video.mp4") {
+            print("DEBUG: setupLocalVideoData - \(fileURL)")
+            // 設定影片資料
+            playerItem = AVPlayerItem(
+                asset: AVAsset(url: fileURL)
+            )
+            
+            playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
+            playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
+            
+            player = AVPlayer(playerItem: playerItem)
+            player?.replaceCurrentItem(with: playerItem)
+            playerLayer.player = player
+            layer.insertSublayer(playerLayer, at: 0)
+
+            // 判斷當前螢幕方向
+            configurePlayerLayout(.portrait)
+            setObserverToPlayer()
+        } else {
+            print("DEBUG: data nil")
+        }
+    }
+            
+    private func saveDataToTemporaryFile(data: Data, fileName: String) -> URL? {
+        let tempDirectory = FileManager.default.temporaryDirectory
+        let fileURL = tempDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try data.write(to: fileURL)
+            return fileURL
+        } catch {
+            print("Failed to save data to temporary file: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     
     /// 設定影片Url
     /// Parameters

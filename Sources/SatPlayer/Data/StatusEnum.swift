@@ -27,13 +27,15 @@ enum TimeJumpType {
 /// - defaultSeekTime: 影片播放進度
 public struct PlayerConfiguration {
     public let videoUrl: String
+    public let videoData: Data?
     public let videoTitle: String
     public let videoImage: UIImage
     public let teacherName: String
     public let defaultSeekTime: Int
     
-    public init(videoUrl: String, videoTitle: String, videoImage: UIImage, teacherName: String, defaultSeekTime: Int) {
+    public init(videoUrl: String, videoData: Data?, videoTitle: String, videoImage: UIImage, teacherName: String, defaultSeekTime: Int) {
         self.videoUrl = videoUrl
+        self.videoData = videoData
         self.videoTitle = videoTitle
         self.videoImage = videoImage
         self.teacherName = teacherName
