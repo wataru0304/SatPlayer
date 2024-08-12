@@ -34,12 +34,12 @@ class ControlPanelView: UIView {
         return btnPlay.rx.tap
     }
     
-    var reverseTapped: ControlEvent<Void> {
-        return btnReverse.rx.tap
+    var previousTapped: ControlEvent<Void> {
+        return btnPrevious.rx.tap
     }
     
-    var forwardTapped: ControlEvent<Void> {
-        return btnForward.rx.tap
+    var nextTapped: ControlEvent<Void> {
+        return btnNext.rx.tap
     }
     
     var fullScreenTapped: ControlEvent<Void> {
@@ -67,9 +67,9 @@ class ControlPanelView: UIView {
     // header
     
     // Control Button
-    private lazy var btnReverse: UIButton = {
+    private lazy var btnPrevious: UIButton = {
         let btn = UIButton()
-            .image(loadImage(named: "backward")!.withRenderingMode(.alwaysTemplate), for: .normal)
+            .image(loadImage(named: "previous-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
         btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         return btn
@@ -89,15 +89,15 @@ class ControlPanelView: UIView {
         .isHidden(true)
     
     
-    private lazy var btnForward: UIButton = {
+    private lazy var btnNext: UIButton = {
         let btn = UIButton()
-            .image(loadImage(named: "forward")!.withRenderingMode(.alwaysTemplate), for: .normal)
+            .image(loadImage(named: "next-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
         btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         return btn
     }()
     
-    private lazy var btnStack = UIStackView(arrangedSubviews: [btnReverse, btnPlay, btnPause, btnForward])
+    private lazy var btnStack = UIStackView(arrangedSubviews: [btnPrevious, btnPlay, btnPause, btnNext])
         .axis(.horizontal)
         .spacing(32)
         .alignment(.center)

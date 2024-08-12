@@ -47,6 +47,10 @@ public class SatPlayer: UIView {
     private var inactivityTimer: Timer?
     private let inactivityInterval: TimeInterval = 3.0
     
+    // 處理單擊 / 雙擊衝突延遲問題
+    private var tapCount = 0
+    private var tapTimer: Timer?
+    
     // MARK: - SubViews
     private lazy var loadingView: UIActivityIndicatorView = {
         let ai = UIActivityIndicatorView(style: .medium)
@@ -475,16 +479,14 @@ private extension SatPlayer {
             }
         }).disposed(by: disposeBag)
         
-        controlPanel.reverseTapped.subscribe(onNext: { [weak self] _ in
+        controlPanel.previousTapped.subscribe(onNext: { [weak self] _ in
             guard let self = self else { return }
-            self.viewModel.isControlHidden.accept(false)
-            self.timeJumpHelper(type: .reverse)
+            self.playPrevious()
         }).disposed(by: disposeBag)
 
-        controlPanel.forwardTapped.subscribe(onNext: { [weak self] _ in
+        controlPanel.nextTapped.subscribe(onNext: { [weak self] _ in
             guard let self = self else { return }
-            self.viewModel.isControlHidden.accept(false)
-            self.timeJumpHelper(type: .forward)
+            self.delegate?.nextTrack()
         }).disposed(by: disposeBag)
     }
     
@@ -494,11 +496,9 @@ private extension SatPlayer {
         tap.numberOfTapsRequired = 1
         tap.delegate = self
         
-//        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
-//        doubleTap.numberOfTapsRequired = 2
-//        doubleTap.delegate = self
-                
-//        tap.require(toFail: doubleTap)
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.delegate = self
         
         let press = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
         press.delegate = self
@@ -507,7 +507,7 @@ private extension SatPlayer {
         pan.delegate = self
         
         self.addGestureRecognizer(tap)
-//        self.addGestureRecognizer(doubleTap)
+        self.addGestureRecognizer(doubleTap)
         self.addGestureRecognizer(press)
         self.addGestureRecognizer(pan)
     }
@@ -558,12 +558,25 @@ private extension SatPlayer {
         }
     }
     
-    // 快轉/倒轉點擊
+    // 快 / 倒轉點擊
     func timeJumpHelper(type: TimeJumpType) {
         guard let currentTime = self.player?.currentTime() else { return }
         let seekTime10Sec = CMTimeGetSeconds(currentTime).advanced(by: type == .forward ? 10 : -10)
         let seekTime = CMTime(value: CMTimeValue(seekTime10Sec), timescale: 1)
         self.viewModel.seekTime.accept(seekTime)
+    }
+    
+    // 播放上一首
+    func playPrevious() {
+        guard let currentTime = player?.currentTime() else { return }
+        let currentTimeInSecond = CMTimeGetSeconds(currentTime)
+        
+        if currentTimeInSecond < 5.0 {
+            delegate?.previousTrack()
+        } else {
+            let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+            self.viewModel.seekTime.accept(newTime)
+        }
     }
 }
 
@@ -578,10 +591,34 @@ private extension SatPlayer {
         switch orientation {
         case .portrait:
             viewModel.orientation.accept(.portrait)
+            reverseSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenWidth / 4)
+                $0.top.left.bottom.equalToSuperview()
+            })
+            forwardSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenWidth / 4)
+                $0.top.right.bottom.equalToSuperview()
+            })
         case .landscapeLeft:
             viewModel.orientation.accept(.landscapeLeft)
+            reverseSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.left.bottom.equalToSuperview()
+            })
+            forwardSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.right.bottom.equalToSuperview()
+            })
         case .landscapeRight:
             viewModel.orientation.accept(.landscapeRight)
+            reverseSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.left.bottom.equalToSuperview()
+            })
+            forwardSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.right.bottom.equalToSuperview()
+            })
         default:
             break
         }
@@ -629,11 +666,18 @@ private extension SatPlayer {
     
     // Player 控制面板顯示 / 消失
     @objc func handleSingleTap(_ sender: UITapGestureRecognizer) {
-        viewModel.isControlHidden.accept(!viewModel.isControlHidden.value)
+        // 處理單擊 / 雙擊衝突延遲問題
+        tapCount += 1
+        if tapCount == 1 {
+            tapTimer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(handleTapTimeout), userInfo: nil, repeats: false)
+        }
     }
     
     // 雙擊快轉 / 倒轉
     @objc func handleDoubleTap(_ sender: UITapGestureRecognizer) {
+        // 處理單擊 / 雙擊衝突延遲問題
+        tapCount = 0
+        tapTimer?.invalidate()
         viewModel.isControlHidden.accept(false)
         let location = sender.location(in: sender.view)
         if let viewWidth = sender.view?.bounds.width {
@@ -654,6 +698,14 @@ private extension SatPlayer {
                 }
             }
         }
+    }
+    
+    // 處理單擊 / 雙擊衝突延遲問題
+    @objc func handleTapTimeout() {
+        if tapCount == 1 {
+            viewModel.isControlHidden.accept(!viewModel.isControlHidden.value)
+        }
+        tapCount = 0
     }
     
     // 長按拖曳 Slider Bar
@@ -819,14 +871,6 @@ extension SatPlayer: NowPlayingHelperDelegate {
     }
     
     func previousTrack() {
-        guard let currentTime = player?.currentTime() else { return }
-        let currentTimeInSecond = CMTimeGetSeconds(currentTime)
-        
-        if currentTimeInSecond < 5.0 {
-            delegate?.previousTrack()
-        } else {
-            let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            self.viewModel.seekTime.accept(newTime)
-        }
+        playPrevious()
     }
 }
