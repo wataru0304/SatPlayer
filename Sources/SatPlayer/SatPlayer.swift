@@ -132,11 +132,6 @@ public class SatPlayer: UIView {
                 print("DEBUG: readyToPlay")
                 // 設定影片播放進度
                 setupDefaultSeekTime(second: defaultSeekTime)
-                // 開始播放
-                viewModel.isLoading.accept(false)
-                play()
-                viewModel.playStatus.accept(.play)
-                viewModel.isControlHidden.accept(false)
             case .failed:
                 print("DEBUG: failed")
             case .unknown:
@@ -180,6 +175,7 @@ public class SatPlayer: UIView {
     /// Parameters
     /// - videoUrl: 影片檔案連結
     public func setupVideoData(videoUrl: String) {
+        self.playerLayer.isHidden = true
         // 設定影片資料
         playerItem = AVPlayerItem(
             asset: AVAsset(url: URL(string: videoUrl)!)
@@ -201,15 +197,14 @@ public class SatPlayer: UIView {
     /// 設定歷史播放進度
     /// Parameters
     /// - defaultSeekTime: 影片播放進度
-    public func setupDefaultSeekTime(defaultSeekTime: Float) {
-        if defaultSeekTime > 0 {
-                self.controlPanel.sliderBar.setValue(defaultSeekTime, animated: true)
-                self.controlPanel.sliderBar.sendActions(for: .valueChanged)
-        }
-    }
-    
     public func setupDefaultSeekTime(second: Int) {
-        player?.seek(to: CMTime(seconds: Double(second), preferredTimescale: CMTimeScale(NSEC_PER_SEC)))
+        player?.seek(to: CMTime(seconds: Double(second), preferredTimescale: CMTimeScale(NSEC_PER_SEC)), completionHandler: { _ in
+            self.playerLayer.isHidden = false
+            // 開始播放
+            self.viewModel.isLoading.accept(false)
+            self.viewModel.playStatus.accept(.play)
+            self.viewModel.isControlHidden.accept(false)
+        })
     }
     
     /// 取得當前播放進度
