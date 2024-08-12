@@ -170,15 +170,9 @@ public class SatPlayer: UIView {
         nowPlayingHelper.setNowPlayingInfo(config: config)
         nowPlayingHelper.delegate = self
         
-        switch UIDevice.current.orientation {
-        case .portrait:
-            self.setDeviceOrientation(.portrait)
-        case .landscapeLeft:
-            self.setDeviceOrientation(.landscapeLeft)
-        case .landscapeRight:
-            self.setDeviceOrientation(.landscapeRight)
-        default:
-            break
+        if let windowScene = self.window?.windowScene {
+            let currentOrientation = windowScene.interfaceOrientation
+            self.setDeviceOrientation(currentOrientation)
         }
     }
     
