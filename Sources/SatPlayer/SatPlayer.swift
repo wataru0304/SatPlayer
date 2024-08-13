@@ -397,7 +397,7 @@ private extension SatPlayer {
             switch orientation {
             case .portrait:
                 UIView.animate(withDuration: 0.3) {
-                    self.frame = CGRect(x: 0, y: 52.paddingWithSafeArea(.top), width: UIScreen.main.bounds.width, height: 211.scale(.width))
+                    self.frame = CGRect(x: 0, y: 56.paddingWithSafeArea(.top), width: UIScreen.main.bounds.width, height: 211.scale(.width))
                 }
             case .landscapeLeft, .landscapeRight:
                 UIView.animate(withDuration: 0.3) {
