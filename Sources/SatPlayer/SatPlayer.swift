@@ -36,6 +36,8 @@ public class SatPlayer: UIView {
     private var playerItem: AVPlayerItem?
     private var playerLayer = AVPlayerLayer()
     private var defaultSeekTime: Int = 0
+    private var defaultSpeed: Float = 1.0
+    private var defaultSubtitle: String?
     private var subtitles = [Subtitle]()
     private var nowPlayingHelper = NowPlayingHelper()
     
@@ -132,6 +134,7 @@ public class SatPlayer: UIView {
                 print("DEBUG: readyToPlay")
                 // 設定影片播放進度
                 setupDefaultSeekTime(second: defaultSeekTime)
+                configureTextTrack(vttUrl: defaultSubtitle)
             case .failed:
                 print("DEBUG: failed")
             case .unknown:
@@ -154,6 +157,8 @@ public class SatPlayer: UIView {
      * videoImageUrl: 影片圖片
      * teacherName: 影片作者名
      * defaultSeekTime: 影片播放進度
+     * defaultSpeed: 預設影片播放速度
+     * defaultSubtitle: 預設影片字幕設定
      */
     public func initVideoPlayer(config: PlayerConfiguration) {
         self.defaultSeekTime = config.defaultSeekTime
@@ -169,6 +174,14 @@ public class SatPlayer: UIView {
             let currentOrientation = windowScene.interfaceOrientation
             self.setDeviceOrientation(currentOrientation)
         }
+        
+        // 設定預設影片播放速度，當影片正在播放時才能設定，因此在 public func setupDefaultSeekTime(second: Int) 後執行
+        self.defaultSpeed = config.defaultSpeed
+        
+        // 設定預設影片字幕，當影片 ready 後才能設定，
+        // 因此在 override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?)
+        // 當中的 status 監聽倒 readyToPlay 後執行
+        self.defaultSubtitle = config.defaultSubtitle
     }
     
     /// 設定影片Url
@@ -204,6 +217,7 @@ public class SatPlayer: UIView {
             self.viewModel.isLoading.accept(false)
             self.viewModel.playStatus.accept(.play)
             self.viewModel.isControlHidden.accept(false)
+            self.speedSetting(rate: self.defaultSpeed)
         })
     }
     
