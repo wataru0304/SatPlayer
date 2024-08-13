@@ -215,7 +215,6 @@ public class SatPlayer: UIView {
             self.playerLayer.isHidden = false
             // 開始播放
             self.viewModel.isLoading.accept(false)
-//            self.viewModel.playStatus.accept(.play)
             self.viewModel.isControlHidden.accept(false)
             self.speedSetting(rate: self.defaultSpeed)
             self.setAirPlaySubtitle(show: self.isAirPlayConnected())
