@@ -8,7 +8,7 @@
 import Foundation
 import UIKit
 
-enum PlayStatus {
+public enum PlayStatus {
     case play
     case pause
 }

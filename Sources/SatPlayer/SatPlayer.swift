@@ -320,6 +320,18 @@ public class SatPlayer: UIView {
     public func setDeviceOrientation(_ orientation: UIInterfaceOrientation) {
         viewModel.deviceOrientation.accept(orientation)
     }
+    
+    public func setPlayStatue(_ status: PlayStatus) {
+        viewModel.playStatus.accept(status)
+    }
+    
+    /// 重播當前影片
+    public func replayVideo() {
+        let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        self.viewModel.seekTime.accept(newTime)
+        viewModel.playStatus.accept(.play)
+        
+    }
 }
 
 // MARK: - Private Helpers
@@ -522,6 +534,7 @@ private extension SatPlayer {
     func play() {
         guard let player = player else { return }
         player.play()
+        player.rate = defaultSpeed
     }
     
     // 暫停
@@ -580,8 +593,7 @@ private extension SatPlayer {
         if currentTimeInSecond < 5.0 {
             delegate?.previousTrack()
         } else {
-            let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            self.viewModel.seekTime.accept(newTime)
+            replayVideo()
         }
     }
 }
