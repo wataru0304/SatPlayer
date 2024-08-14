@@ -108,6 +108,8 @@ public class SatPlayer: UIView {
         // 註冊應用進入背景和返回前景的通知
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        
+        // 監聽 AirPlay 切換事件
         NotificationCenter.default.addObserver(self, selector: #selector(handleRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
         nowPlayingHelper.setupRemoteTransportControls()
     }
@@ -236,6 +238,7 @@ public class SatPlayer: UIView {
     /// Parameters
     /// - vttUrl: 字幕檔案 url，如果傳入 nil 或空字串，將會移除字幕、字幕 timer
     public func configureTextTrack(vttUrl: String?) {
+        self.defaultSubtitle = vttUrl
         viewModel.vttUrl.accept(vttUrl)
     }
     
@@ -817,6 +820,8 @@ private extension SatPlayer {
                 currentItem.select(nil, in: legibleGroup)
                 let noSubtitlesOption = AVMediaSelectionOption()
                 currentItem.select(noSubtitlesOption, in: legibleGroup)
+                // 加入 play button 狀態切換機制，防止 AirPlay 選擇畫面未消失的狀態下 UI 無法更新問題
+                self.controlPanel.changePlayButton(status: .play)
             }
         }
         viewModel.playStatus.accept(.play)
@@ -849,6 +854,20 @@ private extension SatPlayer {
 }
 
 extension SatPlayer: UIGestureRecognizerDelegate {
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // 檢查觸摸是否發生在按鈕上
+        let touchView = touch.view
+        if touchView == controlPanel.btnPlay ||
+            touchView == controlPanel.btnPause ||
+            touchView == controlPanel.btnNext ||
+            touchView == controlPanel.btnPrevious ||
+            touchView == controlPanel.btnAirplay ||
+            touchView == controlPanel.btnSetting ||
+            touchView == controlPanel.btnFullScreen {
+            return false
+        }
+        return true
+    }
     // 允許多個手勢同時識別
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer is UILongPressGestureRecognizer && otherGestureRecognizer is UIPanGestureRecognizer {

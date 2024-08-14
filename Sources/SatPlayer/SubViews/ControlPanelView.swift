@@ -54,20 +54,20 @@ class ControlPanelView: UIView {
         .numberOfLines(1)
         .textColor(.white)
     
-    private lazy var btnAirplay: AVRoutePickerView = {
+    lazy var btnAirplay: AVRoutePickerView = {
         let rp = AVRoutePickerView()
         rp.activeTintColor = .white
         rp.tintColor = .white
         return rp
     }()
     
-    private lazy var btnSetting = UIButton()
+    lazy var btnSetting = UIButton()
         .image(loadImage(named: "setting")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
     // header
     
     // Control Button
-    private lazy var btnPrevious: UIButton = {
+    lazy var btnPrevious: UIButton = {
         let btn = UIButton()
             .image(loadImage(named: "previous-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
@@ -75,13 +75,13 @@ class ControlPanelView: UIView {
         return btn
     }()
 
-    private lazy var btnPlay = UIButton()
+    lazy var btnPlay = UIButton()
         .image(loadImage(named: "play")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
         .backgroundColor(.black.withAlphaComponent(0.2))
         .cornerRadius(24)
     
-    private lazy var btnPause = UIButton()
+    lazy var btnPause = UIButton()
         .image(loadImage(named: "pause")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
         .backgroundColor(.black.withAlphaComponent(0.2))
@@ -89,7 +89,7 @@ class ControlPanelView: UIView {
         .isHidden(true)
     
     
-    private lazy var btnNext: UIButton = {
+    lazy var btnNext: UIButton = {
         let btn = UIButton()
             .image(loadImage(named: "next-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
@@ -130,7 +130,7 @@ class ControlPanelView: UIView {
         .spacing(6)
         .alignment(.center)
     
-    private lazy var btnFullScreen = UIButton()
+    lazy var btnFullScreen = UIButton()
         .image(loadImage(named: "fullScreen")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
     // footer
@@ -166,6 +166,17 @@ class ControlPanelView: UIView {
     
     func updateBufferProgress(bufferProgress: Float) {
         sliderBar.bufferProgress = bufferProgress
+    }
+    
+    func changePlayButton(status: PlayStatus) {
+        switch status {
+        case .play:
+            self.btnPlay.isHidden = true
+            self.btnPause.isHidden = false
+        case .pause:
+            self.btnPlay.isHidden = false
+            self.btnPause.isHidden = true
+        }
     }
 }
 
@@ -268,14 +279,7 @@ private extension ControlPanelView {
         
         viewModel.playStatus.subscribe(onNext: { [weak self] status in
             guard let self = self else { return }
-            switch status {
-            case .play:
-                self.btnPlay.isHidden = true
-                self.btnPause.isHidden = false
-            case .pause:
-                self.btnPlay.isHidden = false
-                self.btnPause.isHidden = true
-            }
+            self.changePlayButton(status: status)
         }).disposed(by: disposeBag)
     }
     
