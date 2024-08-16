@@ -46,7 +46,7 @@ class NowPlayingHelper {
 //        commandCenter.pauseCommand.removeTarget(nil)
 //        commandCenter.nextTrackCommand.removeTarget(nil)
 //        commandCenter.previousTrackCommand.removeTarget(nil)
-//        commandCenter.changePlaybackPositionCommand.removeTarget(nil)
+        commandCenter.changePlaybackPositionCommand.removeTarget(nil)
     }
     
     // Configure Media player now playing info
@@ -56,13 +56,13 @@ class NowPlayingHelper {
         nowPlayingInfo[MPNowPlayingInfoPropertyMediaType] = NSNumber(value: MPNowPlayingInfoMediaType.audio.rawValue)
         
         var videoImage = config.videoImage
-//        if let url = URL(string: config.videoImageUrl), let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
-//            videoImage = image
-//        }
-//        
-        nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: videoImage.size) { _ in
-            return videoImage
+        DispatchQueue.main.async {
+            self.nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: videoImage.size) { _ in
+                print("DEBUG: set image: \(videoImage)")
+                return videoImage
+            }
         }
+        
         
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
