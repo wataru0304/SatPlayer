@@ -58,7 +58,6 @@ class NowPlayingHelper {
         var videoImage = config.videoImage
         DispatchQueue.main.async {
             self.nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: videoImage.size) { _ in
-                print("DEBUG: set image: \(videoImage)")
                 return videoImage
             }
         }
