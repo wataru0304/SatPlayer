@@ -109,6 +109,9 @@ class ControlPanelView: UIView {
         .font(.systemFont(ofSize: 12))
         .textColor(.white)
     
+    lazy var sliderCoverView = UIView()
+        .backgroundColor(.clear)
+    
     lazy var sliderBar: BufferSlider = {
         let sb = BufferSlider()
         sb.tintColor = #colorLiteral(red: 0, green: 0.3607843137, blue: 1, alpha: 1)
@@ -218,6 +221,7 @@ private extension ControlPanelView {
         // Footer
         addSubview(btnFullScreen)
         addSubview(progressStack)
+        addSubview(sliderCoverView)
 
         btnFullScreen.snp.makeConstraints({
             $0.bottom.right.equalToSuperview().inset(12)
@@ -226,6 +230,11 @@ private extension ControlPanelView {
             $0.centerY.equalTo(btnFullScreen.snp.centerY)
             $0.left.equalToSuperview().inset(12)
             $0.right.equalTo(btnFullScreen.snp.left).offset(-12)
+        })
+        sliderCoverView.snp.makeConstraints({
+            $0.left.right.equalTo(progressStack)
+            $0.centerY.equalTo(progressStack)
+            $0.height.equalTo(40)
         })
         // Footer
     }

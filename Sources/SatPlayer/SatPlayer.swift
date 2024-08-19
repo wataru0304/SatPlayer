@@ -467,7 +467,9 @@ private extension SatPlayer {
     func bindEvent() {
         controlPanel.sliderValue.subscribe(onNext: { [weak self] value in
             guard let self = self, let duration = self.player?.currentItem?.duration else { return }
+            viewModel.isControlHidden.accept(false)
             let value = Float64(value) * CMTimeGetSeconds(duration)
+            print("DEBGU: \(value.isNaN)")
             if value.isNaN == false {
                 let seekTime = CMTime(value: CMTimeValue(value), timescale: 1)
                 self.viewModel.seekTime.accept(seekTime)
@@ -519,7 +521,7 @@ private extension SatPlayer {
         doubleTap.numberOfTapsRequired = 2
         doubleTap.delegate = self
         
-        let press = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
+        let press = UILongPressGestureRecognizer(target: self, action: #selector(handleViewLongPress))
         press.delegate = self
         
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
@@ -529,6 +531,11 @@ private extension SatPlayer {
         self.addGestureRecognizer(doubleTap)
         self.addGestureRecognizer(press)
         self.addGestureRecognizer(pan)
+        
+        let sliderLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleSliderLongPress))
+        sliderLongPress.minimumPressDuration = 0.05
+        sliderLongPress.delegate = self
+        controlPanel.sliderCoverView.addGestureRecognizer(sliderLongPress)
     }
     
     // 播放
@@ -697,7 +704,6 @@ private extension SatPlayer {
         // 處理單擊 / 雙擊衝突延遲問題
         tapCount = 0
         tapTimer?.invalidate()
-        viewModel.isControlHidden.accept(false)
         let location = sender.location(in: sender.view)
         if let viewWidth = sender.view?.bounds.width {
             timeJumpHelper(type: location.x > viewWidth / 2 ? .forward : .reverse)
@@ -708,6 +714,7 @@ private extension SatPlayer {
                     self.reverseSkeletonView.alpha = 1
                 }
             } completion: { _ in
+                self.viewModel.isControlHidden.accept(true)
                 UIView.animate(withDuration: 0.3, delay: 0.6) {
                     if location.x > viewWidth / 2 {
                         self.forwardSkeletonView.alpha = 0
@@ -728,33 +735,13 @@ private extension SatPlayer {
     }
     
     // 長按拖曳 Slider Bar
-    @objc func handleLongPress(_ sender: UILongPressGestureRecognizer) {
-        switch sender.state {
-        case .began:
-            HapticFeedbackGenerator.notification(type: .success)
-            initialCenter = sender.location(in: self)
-            initialSliderValue = controlPanel.sliderBar.value
-            viewModel.playStatus.accept(.pause)
-            viewModel.isControlHidden.accept(false)
-        case .changed:
-            let currentLocation = sender.location(in: self)
-            let deltaX = currentLocation.x - initialCenter!.x
-            let sliderWidth = controlPanel.sliderBar.frame.width
-            let sliderRange = controlPanel.sliderBar.maximumValue - controlPanel.sliderBar.minimumValue
-            let deltaValue = Float(deltaX / sliderWidth) * sliderRange
-            
-            controlPanel.sliderBar.value = initialSliderValue + deltaValue
-            controlPanel.sliderBar.value = min(max(controlPanel.sliderBar.value, controlPanel.sliderBar.minimumValue), controlPanel.sliderBar.maximumValue)
-            viewModel.isControlHidden.accept(false)
-        case .ended:
-            controlPanel.sliderBar.sendActions(for: .valueChanged)
-            initialCenter = nil
-            initialSliderValue = 0.0
-            viewModel.playStatus.accept(.play)
-            viewModel.isControlHidden.accept(false)
-        default:
-            break
-        }
+    @objc func handleViewLongPress(_ sender: UILongPressGestureRecognizer) {
+        longPressHandler(sender: sender, setHapticFeedback: true)
+    }
+    
+    // 設定 Slider Bar 長按拖曳
+    @objc func handleSliderLongPress(_ sender: UILongPressGestureRecognizer) {
+        longPressHandler(sender: sender, setHapticFeedback: false)
     }
     
     @objc func handlePan(_ sender: UIPanGestureRecognizer) {
@@ -801,6 +788,37 @@ private extension SatPlayer {
             default:
                 break
             }
+        }
+    }
+    
+    private func longPressHandler(sender: UILongPressGestureRecognizer, setHapticFeedback: Bool) {
+        switch sender.state {
+        case .began:
+            if setHapticFeedback {
+                HapticFeedbackGenerator.notification(type: .success)
+            }
+            initialCenter = sender.location(in: self)
+            initialSliderValue = controlPanel.sliderBar.value
+            viewModel.playStatus.accept(.pause)
+            viewModel.isControlHidden.accept(false)
+        case .changed:
+            let currentLocation = sender.location(in: self)
+            let deltaX = currentLocation.x - initialCenter!.x
+            let sliderWidth = controlPanel.sliderBar.frame.width
+            let sliderRange = controlPanel.sliderBar.maximumValue - controlPanel.sliderBar.minimumValue
+            let deltaValue = Float(deltaX / sliderWidth) * sliderRange
+            
+            controlPanel.sliderBar.value = initialSliderValue + deltaValue
+            controlPanel.sliderBar.value = min(max(controlPanel.sliderBar.value, controlPanel.sliderBar.minimumValue), controlPanel.sliderBar.maximumValue)
+            viewModel.isControlHidden.accept(false)
+        case .ended:
+            controlPanel.sliderBar.sendActions(for: .valueChanged)
+            initialCenter = nil
+            initialSliderValue = 0.0
+            viewModel.playStatus.accept(.play)
+            viewModel.isControlHidden.accept(false)
+        default:
+            break
         }
     }
 }
