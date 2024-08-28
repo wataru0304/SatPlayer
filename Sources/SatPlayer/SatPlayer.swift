@@ -120,18 +120,19 @@ public class SatPlayer: UIView {
     
     // Video buffer observe
     public override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        guard let playerItem = playerItem else { return }
         if keyPath == "loadedTimeRanges" {
-            guard let timeRanges = playerItem!.loadedTimeRanges as? [NSValue] else { return }
+            guard let timeRanges = playerItem.loadedTimeRanges as? [NSValue] else { return }
             if let timeRange = timeRanges.first?.timeRangeValue {
                 let bufferedTime = CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration)
-                let duration = CMTimeGetSeconds(playerItem!.duration)
+                let duration = CMTimeGetSeconds(playerItem.duration)
                 let progress = bufferedTime / duration
                 controlPanel.updateBufferProgress(bufferProgress: Float(progress))
             }
         }
         
         if keyPath == "status" {
-            switch playerItem?.status {
+            switch playerItem.status {
             case .readyToPlay:
                 print("DEBUG: readyToPlay")
                 // 設定影片播放進度
@@ -140,11 +141,7 @@ public class SatPlayer: UIView {
             case .failed:
                 print("DEBUG: failed")
             case .unknown:
-                viewModel.isLoading.accept(true)                    
-            case .none:
-                print("DEBUG: none")
-            case .some(_):
-                print("DEBUG: some")
+                viewModel.isLoading.accept(true)
             }
         }
     }
@@ -167,7 +164,12 @@ public class SatPlayer: UIView {
         // 設定影片名稱
         controlPanel.setVideoTitle(config.videoTitle)
         // 設定影片
-        setupVideoData(videoUrl: config.videoUrl)
+        if let videoData = config.videoData {
+            setupLocalVideoData(data: videoData)
+        } else if let videoUrl = config.videoUrl {
+            setupVideoData(videoUrl: videoUrl)
+        }
+
         // 設定鎖屏播放器資訊
         nowPlayingHelper.setNowPlayingInfo(config: config)
         nowPlayingHelper.delegate = self
@@ -604,6 +606,43 @@ private extension SatPlayer {
             replayVideo()
         }
     }
+    
+    func setupLocalVideoData(data: Data) {
+        if let fileURL = saveDataToTemporaryFile(data: data, fileName: "temporary_video.mp4") {
+            print("DEBUG: setupLocalVideoData - \(fileURL)")
+            // 設定影片資料
+            playerItem = AVPlayerItem(
+                asset: AVAsset(url: fileURL)
+            )
+            
+            playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
+            playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
+            
+            player = AVPlayer(playerItem: playerItem)
+            player?.replaceCurrentItem(with: playerItem)
+            playerLayer.player = player
+            layer.insertSublayer(playerLayer, at: 0)
+
+            // 判斷當前螢幕方向
+            configurePlayerLayout(.portrait)
+            setObserverToPlayer()
+        } else {
+            print("DEBUG: data nil")
+        }
+    }
+            
+    func saveDataToTemporaryFile(data: Data, fileName: String) -> URL? {
+        let tempDirectory = FileManager.default.temporaryDirectory
+        let fileURL = tempDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try data.write(to: fileURL)
+            return fileURL
+        } catch {
+            print("Failed to save data to temporary file: \(error.localizedDescription)")
+            return nil
+        }
+    }
 }
 
 // MARK: - 螢幕轉向 Helper
@@ -658,17 +697,30 @@ private extension SatPlayer {
     // 讀取 VTT 檔案
     func loadAndParseSubtitles(from urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let self = self else { return }
-            if let error = error {
+        var content = String()
+        if url.scheme == "file" {
+            // 離線播放，讀取本地字幕
+            do {
+                let data = try String(contentsOf: URL(string: urlString)!)
+                content = data
+            } catch {
                 print("Failed to load subtitles: \(error)")
-                return
             }
+        } else {
+            URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+                guard let self = self else { return }
+                if let error = error {
+                    print("Failed to load subtitles: \(error)")
+                    return
+                }
 
-            guard let data = data, let content = String(data: data, encoding: .utf8) else { return }
-            let parser = WebVTTParser()
-            self.subtitles = parser.parseVTT(content)
-        }.resume()
+                guard let data = data, let data = String(data: data, encoding: .utf8) else { return }
+                content = content
+            }.resume()
+        }
+        
+        let parser = WebVTTParser()
+        self.subtitles = parser.parseVTT(content)
     }
     
     // 依照播放進度更新字幕
