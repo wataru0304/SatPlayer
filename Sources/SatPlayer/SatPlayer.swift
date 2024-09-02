@@ -21,6 +21,7 @@ public class SatPlayer: UIView {
     
     // MARK: - Public Properties
     public weak var delegate: SatPlayerDelegate?
+    public var isPlayFinish: (() -> Void)?
     
     // MARK: - Private Properteis
     private let disposeBag = DisposeBag()
@@ -283,6 +284,9 @@ public class SatPlayer: UIView {
         viewModel.isControlHidden.accept(true)
         viewModel.seekTime.accept(CMTime())
         viewModel.vttUrl.accept(nil)
+        
+        playerItem!.removeObserver(self, forKeyPath: "status")
+        playerItem!.removeObserver(self, forKeyPath: "loadedTimeRanges")
 
         // 清除 player data
         self.playerItem = nil
@@ -471,7 +475,6 @@ private extension SatPlayer {
             guard let self = self, let duration = self.player?.currentItem?.duration else { return }
             viewModel.isControlHidden.accept(false)
             let value = Float64(value) * CMTimeGetSeconds(duration)
-            print("DEBGU: \(value.isNaN)")
             if value.isNaN == false {
                 let seekTime = CMTime(value: CMTimeValue(value), timescale: 1)
                 self.viewModel.seekTime.accept(seekTime)
@@ -571,6 +574,11 @@ private extension SatPlayer {
         
         let currentTimeInSecond = CMTimeGetSeconds(currentTime)
         let durationTimeInSecond = CMTimeGetSeconds(duration)
+        
+        // 監聽是否播放完畢
+        if durationTimeInSecond.isFinite {
+            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) { isPlayFinish?() }
+        }
         
         controlPanel.updatePlayerTime(currentTimeInSecond: currentTimeInSecond,
                                             durationTimeInSecond: durationTimeInSecond)
