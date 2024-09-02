@@ -62,29 +62,30 @@ class WebVTTParser {
     
     private func parseTimeInterval(_ string: String) -> TimeInterval? {
         let components = string.components(separatedBy: ":")
-        if components.count == 2 {
-            let minutes = Double(components[0]) ?? 0
-            let secondsComponents = components[1].components(separatedBy: ".")
-            guard secondsComponents.count == 2 else { return nil }
-            
-            let seconds = Double(secondsComponents[0]) ?? 0
-            let milliseconds = Double(secondsComponents[1]) ?? 0
-            
-            return (minutes * 60) + seconds + (milliseconds / 1000)
-        }
-        if components.count == 3 {
-            let hours = Double(components[0]) ?? 0
-            let minutes = Double(components[1]) ?? 0
-            let secondsComponents = components[2].components(separatedBy: ".")
-            guard secondsComponents.count == 2 else { return nil }
-            
-            let seconds = Double(secondsComponents[0]) ?? 0
-            let milliseconds = Double(secondsComponents[1]) ?? 0
-            
-            return (hours * 3600) + (minutes * 60) + seconds + (milliseconds / 1000)
-        }
+        let minutes = Double(components[0]) ?? 0
+        let secondsComponents = components[1].components(separatedBy: ".")
+        guard secondsComponents.count == 2 else { return nil }
         
-        return nil
+        let seconds = Double(secondsComponents[0]) ?? 0
+        let milliseconds = Double(secondsComponents[1]) ?? 0
+        
+        return (minutes * 60) + seconds + (milliseconds / 1000)
+//        if components.count == 2 {
+//
+//        }
+//        if components.count == 3 {
+//            let hours = Double(components[0]) ?? 0
+//            let minutes = Double(components[1]) ?? 0
+//            let secondsComponents = components[2].components(separatedBy: ".")
+//            guard secondsComponents.count == 2 else { return nil }
+//            
+//            let seconds = Double(secondsComponents[0]) ?? 0
+//            let milliseconds = Double(secondsComponents[1]) ?? 0
+//            
+//            return (hours * 3600) + (minutes * 60) + seconds + (milliseconds / 1000)
+//        }
+//        
+//        return nil
     }
 }
 
