@@ -21,7 +21,6 @@ public class SatPlayer: UIView {
     
     // MARK: - Public Properties
     public weak var delegate: SatPlayerDelegate?
-    public var isPlayFinish: (() -> Void)?
     
     // MARK: - Private Properteis
     private let disposeBag = DisposeBag()
@@ -121,19 +120,18 @@ public class SatPlayer: UIView {
     
     // Video buffer observe
     public override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        guard let playerItem = playerItem else { return }
         if keyPath == "loadedTimeRanges" {
-            guard let timeRanges = playerItem.loadedTimeRanges as? [NSValue] else { return }
+            guard let timeRanges = playerItem!.loadedTimeRanges as? [NSValue] else { return }
             if let timeRange = timeRanges.first?.timeRangeValue {
                 let bufferedTime = CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration)
-                let duration = CMTimeGetSeconds(playerItem.duration)
+                let duration = CMTimeGetSeconds(playerItem!.duration)
                 let progress = bufferedTime / duration
                 controlPanel.updateBufferProgress(bufferProgress: Float(progress))
             }
         }
         
         if keyPath == "status" {
-            switch playerItem.status {
+            switch playerItem?.status {
             case .readyToPlay:
                 print("DEBUG: readyToPlay")
                 // 設定影片播放進度
@@ -143,6 +141,10 @@ public class SatPlayer: UIView {
                 print("DEBUG: failed")
             case .unknown:
                 viewModel.isLoading.accept(true)
+            case .none:
+                print("DEBUG: none")
+            case .some(_):
+                print("DEBUG: some")
             }
         }
     }
@@ -165,12 +167,7 @@ public class SatPlayer: UIView {
         // 設定影片名稱
         controlPanel.setVideoTitle(config.videoTitle)
         // 設定影片
-        if let videoData = config.videoData {
-            setupLocalVideoData(data: videoData)
-        } else if let videoUrl = config.videoUrl {
-            setupVideoData(videoUrl: videoUrl)
-        }
-
+        setupVideoData(videoUrl: config.videoUrl)
         // 設定鎖屏播放器資訊
         nowPlayingHelper.setNowPlayingInfo(config: config)
         nowPlayingHelper.delegate = self
@@ -247,7 +244,7 @@ public class SatPlayer: UIView {
     
     /// 切換影片畫質
     /// Parameters
-    /// - url: 影片 url 
+    /// - url: 影片 url
     public func switchRendition(url: String, defaultSeekTime: Int) {
         self.defaultSeekTime = defaultSeekTime
         startLoading()
@@ -284,9 +281,6 @@ public class SatPlayer: UIView {
         viewModel.isControlHidden.accept(true)
         viewModel.seekTime.accept(CMTime())
         viewModel.vttUrl.accept(nil)
-        
-        playerItem!.removeObserver(self, forKeyPath: "status")
-        playerItem!.removeObserver(self, forKeyPath: "loadedTimeRanges")
 
         // 清除 player data
         self.playerItem = nil
@@ -295,7 +289,7 @@ public class SatPlayer: UIView {
     }
     
     /// 清除 nowPlaying data
-    public func cleanNowPlayingData() {   
+    public func cleanNowPlayingData() {
         nowPlayingHelper.cleanData()
     }
     
@@ -475,6 +469,7 @@ private extension SatPlayer {
             guard let self = self, let duration = self.player?.currentItem?.duration else { return }
             viewModel.isControlHidden.accept(false)
             let value = Float64(value) * CMTimeGetSeconds(duration)
+            print("DEBGU: \(value.isNaN)")
             if value.isNaN == false {
                 let seekTime = CMTime(value: CMTimeValue(value), timescale: 1)
                 self.viewModel.seekTime.accept(seekTime)
@@ -575,11 +570,6 @@ private extension SatPlayer {
         let currentTimeInSecond = CMTimeGetSeconds(currentTime)
         let durationTimeInSecond = CMTimeGetSeconds(duration)
         
-        // 監聽是否播放完畢
-        if durationTimeInSecond.isFinite {
-            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) { isPlayFinish?() }
-        }
-        
         controlPanel.updatePlayerTime(currentTimeInSecond: currentTimeInSecond,
                                             durationTimeInSecond: durationTimeInSecond)
         
@@ -612,43 +602,6 @@ private extension SatPlayer {
             delegate?.previousTrack()
         } else {
             replayVideo()
-        }
-    }
-    
-    func setupLocalVideoData(data: Data) {
-        if let fileURL = saveDataToTemporaryFile(data: data, fileName: "temporary_video.mp4") {
-            print("DEBUG: setupLocalVideoData - \(fileURL)")
-            // 設定影片資料
-            playerItem = AVPlayerItem(
-                asset: AVAsset(url: fileURL)
-            )
-            
-            playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
-            playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
-            
-            player = AVPlayer(playerItem: playerItem)
-            player?.replaceCurrentItem(with: playerItem)
-            playerLayer.player = player
-            layer.insertSublayer(playerLayer, at: 0)
-
-            // 判斷當前螢幕方向
-            configurePlayerLayout(.portrait)
-            setObserverToPlayer()
-        } else {
-            print("DEBUG: data nil")
-        }
-    }
-            
-    func saveDataToTemporaryFile(data: Data, fileName: String) -> URL? {
-        let tempDirectory = FileManager.default.temporaryDirectory
-        let fileURL = tempDirectory.appendingPathComponent(fileName)
-        
-        do {
-            try data.write(to: fileURL)
-            return fileURL
-        } catch {
-            print("Failed to save data to temporary file: \(error.localizedDescription)")
-            return nil
         }
     }
 }
@@ -705,30 +658,17 @@ private extension SatPlayer {
     // 讀取 VTT 檔案
     func loadAndParseSubtitles(from urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        var content = String()
-        if url.scheme == "file" {
-            // 離線播放，讀取本地字幕
-            do {
-                let data = try String(contentsOf: URL(string: urlString)!)
-                content = data
-            } catch {
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            guard let self = self else { return }
+            if let error = error {
                 print("Failed to load subtitles: \(error)")
+                return
             }
-        } else {
-            URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-                guard let self = self else { return }
-                if let error = error {
-                    print("Failed to load subtitles: \(error)")
-                    return
-                }
 
-                guard let data = data, let data = String(data: data, encoding: .utf8) else { return }
-                content = content
-            }.resume()
-        }
-        
-        let parser = WebVTTParser()
-        self.subtitles = parser.parseVTT(content)
+            guard let data = data, let content = String(data: data, encoding: .utf8) else { return }
+            let parser = WebVTTParser()
+            self.subtitles = parser.parseVTT(content)
+        }.resume()
     }
     
     // 依照播放進度更新字幕

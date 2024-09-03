@@ -28,8 +28,7 @@ enum TimeJumpType {
 /// - defaultSpeed: 預設影片播放速度
 /// - defaultSubtitle: 預設影片字幕設定
 public struct PlayerConfiguration {
-    public let videoUrl: String?
-    public let videoData: Data?
+    public let videoUrl: String
     public let videoTitle: String
     public let videoImage: UIImage
     public let teacherName: String
@@ -37,9 +36,8 @@ public struct PlayerConfiguration {
     public var defaultSpeed: Float
     public var defaultSubtitle: String?
     
-    public init(videoUrl: String? = nil, videoData: Data? = nil, videoTitle: String, videoImage: UIImage, teacherName: String, defaultSeekTime: Int, defaultSpeed: Float, defaultSubtitle: String? = nil) {
+    public init(videoUrl: String, videoTitle: String, videoImage: UIImage, teacherName: String, defaultSeekTime: Int, defaultSpeed: Float, defaultSubtitle: String? = nil) {
         self.videoUrl = videoUrl
-        self.videoData = videoData
         self.videoTitle = videoTitle
         self.videoImage = videoImage
         self.teacherName = teacherName
