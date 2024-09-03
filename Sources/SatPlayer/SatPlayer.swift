@@ -21,6 +21,7 @@ public class SatPlayer: UIView {
     
     // MARK: - Public Properties
     public weak var delegate: SatPlayerDelegate?
+    public var isPlayFinish: (() -> Void)?
     
     // MARK: - Private Properteis
     private let disposeBag = DisposeBag()
@@ -36,6 +37,8 @@ public class SatPlayer: UIView {
     private var playerItem: AVPlayerItem?
     private var playerLayer = AVPlayerLayer()
     private var defaultSeekTime: Int = 0
+    private var defaultSpeed: Float = 1.0
+    private var defaultSubtitle: String?
     private var subtitles = [Subtitle]()
     private var nowPlayingHelper = NowPlayingHelper()
     
@@ -46,6 +49,10 @@ public class SatPlayer: UIView {
     // Control Panel 顯示計時器
     private var inactivityTimer: Timer?
     private let inactivityInterval: TimeInterval = 3.0
+    
+    // 處理單擊 / 雙擊衝突延遲問題
+    private var tapCount = 0
+    private var tapTimer: Timer?
     
     // MARK: - SubViews
     private lazy var loadingView: UIActivityIndicatorView = {
@@ -102,6 +109,8 @@ public class SatPlayer: UIView {
         // 註冊應用進入背景和返回前景的通知
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        
+        // 監聽 AirPlay 切換事件
         NotificationCenter.default.addObserver(self, selector: #selector(handleRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
         nowPlayingHelper.setupRemoteTransportControls()
     }
@@ -112,35 +121,28 @@ public class SatPlayer: UIView {
     
     // Video buffer observe
     public override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        guard let playerItem = playerItem else { return }
         if keyPath == "loadedTimeRanges" {
-            guard let timeRanges = playerItem!.loadedTimeRanges as? [NSValue] else { return }
+            guard let timeRanges = playerItem.loadedTimeRanges as? [NSValue] else { return }
             if let timeRange = timeRanges.first?.timeRangeValue {
                 let bufferedTime = CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration)
-                let duration = CMTimeGetSeconds(playerItem!.duration)
+                let duration = CMTimeGetSeconds(playerItem.duration)
                 let progress = bufferedTime / duration
                 controlPanel.updateBufferProgress(bufferProgress: Float(progress))
             }
         }
         
         if keyPath == "status" {
-            switch playerItem?.status {
+            switch playerItem.status {
             case .readyToPlay:
                 print("DEBUG: readyToPlay")
                 // 設定影片播放進度
                 setupDefaultSeekTime(second: defaultSeekTime)
-                // 開始播放
-                viewModel.isLoading.accept(false)
-                play()
-                viewModel.playStatus.accept(.play)
-                viewModel.isControlHidden.accept(false)
+                configureTextTrack(vttUrl: defaultSubtitle)
             case .failed:
                 print("DEBUG: failed")
             case .unknown:
-                viewModel.isLoading.accept(true)                    
-            case .none:
-                print("DEBUG: none")
-            case .some(_):
-                print("DEBUG: some")
+                viewModel.isLoading.accept(true)
             }
         }
     }
@@ -155,6 +157,8 @@ public class SatPlayer: UIView {
      * videoImageUrl: 影片圖片
      * teacherName: 影片作者名
      * defaultSeekTime: 影片播放進度
+     * defaultSpeed: 預設影片播放速度
+     * defaultSubtitle: 預設影片字幕設定
      */
     public func initVideoPlayer(config: PlayerConfiguration) {
         self.defaultSeekTime = config.defaultSeekTime
@@ -163,67 +167,33 @@ public class SatPlayer: UIView {
         // 設定影片
         if let videoData = config.videoData {
             setupLocalVideoData(data: videoData)
-        } else {
-            setupVideoData(videoUrl: config.videoUrl)
+        } else if let videoUrl = config.videoUrl {
+            setupVideoData(videoUrl: videoUrl)
         }
+
         // 設定鎖屏播放器資訊
         nowPlayingHelper.setNowPlayingInfo(config: config)
         nowPlayingHelper.delegate = self
         
-        switch UIDevice.current.orientation {
-        case .portrait:
-            self.setDeviceOrientation(.portrait)
-        case .landscapeLeft:
-            self.setDeviceOrientation(.landscapeLeft)
-        case .landscapeRight:
-            self.setDeviceOrientation(.landscapeRight)
-        default:
-            break
+        if let windowScene = self.window?.windowScene {
+            let currentOrientation = windowScene.interfaceOrientation
+            self.setDeviceOrientation(currentOrientation)
         }
-    }
-    
-    private func setupLocalVideoData(data: Data) {
-        if let fileURL = saveDataToTemporaryFile(data: data, fileName: "temporary_video.mp4") {
-            print("DEBUG: setupLocalVideoData - \(fileURL)")
-            // 設定影片資料
-            playerItem = AVPlayerItem(
-                asset: AVAsset(url: fileURL)
-            )
-            
-            playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
-            playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
-            
-            player = AVPlayer(playerItem: playerItem)
-            player?.replaceCurrentItem(with: playerItem)
-            playerLayer.player = player
-            layer.insertSublayer(playerLayer, at: 0)
-
-            // 判斷當前螢幕方向
-            configurePlayerLayout(.portrait)
-            setObserverToPlayer()
-        } else {
-            print("DEBUG: data nil")
-        }
-    }
-            
-    private func saveDataToTemporaryFile(data: Data, fileName: String) -> URL? {
-        let tempDirectory = FileManager.default.temporaryDirectory
-        let fileURL = tempDirectory.appendingPathComponent(fileName)
         
-        do {
-            try data.write(to: fileURL)
-            return fileURL
-        } catch {
-            print("Failed to save data to temporary file: \(error.localizedDescription)")
-            return nil
-        }
+        // 設定預設影片播放速度，當影片正在播放時才能設定，因此在 public func setupDefaultSeekTime(second: Int) 後執行
+        self.defaultSpeed = config.defaultSpeed
+        
+        // 設定預設影片字幕，當影片 ready 後才能設定，
+        // 因此在 override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?)
+        // 當中的 status 監聽倒 readyToPlay 後執行
+        self.defaultSubtitle = config.defaultSubtitle
     }
-
     
     /// 設定影片Url
     /// Parameters
     /// - videoUrl: 影片檔案連結
     public func setupVideoData(videoUrl: String) {
+        self.playerLayer.isHidden = true
         // 設定影片資料
         playerItem = AVPlayerItem(
             asset: AVAsset(url: URL(string: videoUrl)!)
@@ -245,15 +215,15 @@ public class SatPlayer: UIView {
     /// 設定歷史播放進度
     /// Parameters
     /// - defaultSeekTime: 影片播放進度
-    public func setupDefaultSeekTime(defaultSeekTime: Float) {
-        if defaultSeekTime > 0 {
-                self.controlPanel.sliderBar.setValue(defaultSeekTime, animated: true)
-                self.controlPanel.sliderBar.sendActions(for: .valueChanged)
-        }
-    }
-    
     public func setupDefaultSeekTime(second: Int) {
-        player?.seek(to: CMTime(seconds: Double(second), preferredTimescale: CMTimeScale(NSEC_PER_SEC)))
+        player?.seek(to: CMTime(seconds: Double(second), preferredTimescale: CMTimeScale(NSEC_PER_SEC)), completionHandler: { _ in
+            self.playerLayer.isHidden = false
+            // 開始播放
+            self.viewModel.isLoading.accept(false)
+            self.viewModel.isControlHidden.accept(false)
+            self.speedSetting(rate: self.defaultSpeed)
+            self.setAirPlaySubtitle(show: self.isAirPlayConnected())
+        })
     }
     
     /// 取得當前播放進度
@@ -271,6 +241,7 @@ public class SatPlayer: UIView {
     /// Parameters
     /// - vttUrl: 字幕檔案 url，如果傳入 nil 或空字串，將會移除字幕、字幕 timer
     public func configureTextTrack(vttUrl: String?) {
+        self.defaultSubtitle = vttUrl
         viewModel.vttUrl.accept(vttUrl)
     }
     
@@ -313,6 +284,9 @@ public class SatPlayer: UIView {
         viewModel.isControlHidden.accept(true)
         viewModel.seekTime.accept(CMTime())
         viewModel.vttUrl.accept(nil)
+        
+        playerItem!.removeObserver(self, forKeyPath: "status")
+        playerItem!.removeObserver(self, forKeyPath: "loadedTimeRanges")
 
         // 清除 player data
         self.playerItem = nil
@@ -351,6 +325,18 @@ public class SatPlayer: UIView {
     /// .landscapeLeft = 4 // Device oriented horizontally, home button on the right
     public func setDeviceOrientation(_ orientation: UIInterfaceOrientation) {
         viewModel.deviceOrientation.accept(orientation)
+    }
+    
+    public func setPlayStatue(_ status: PlayStatus) {
+        viewModel.playStatus.accept(status)
+    }
+    
+    /// 重播當前影片
+    public func replayVideo() {
+        let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        self.viewModel.seekTime.accept(newTime)
+        viewModel.playStatus.accept(.play)
+        
     }
 }
 
@@ -432,7 +418,7 @@ private extension SatPlayer {
             switch orientation {
             case .portrait:
                 UIView.animate(withDuration: 0.3) {
-                    self.frame = CGRect(x: 0, y: 52.paddingWithSafeArea(.top), width: UIScreen.main.bounds.width, height: 211.scale(.width))
+                    self.frame = CGRect(x: 0, y: 56.paddingWithSafeArea(.top), width: UIScreen.main.bounds.width, height: 211.scale(.width))
                 }
             case .landscapeLeft, .landscapeRight:
                 UIView.animate(withDuration: 0.3) {
@@ -461,9 +447,10 @@ private extension SatPlayer {
         
         viewModel.seekTime.subscribe(onNext: { [weak self] seekTime in
             guard let self = self, let player = self.player else { return }
-            player.seek(to: seekTime)
-            if self.viewModel.playStatus.value == .pause {
-                self.viewModel.playStatus.accept(.play)
+            player.seek(to: seekTime) { _ in
+                if self.viewModel.playStatus.value == .pause {
+                    self.viewModel.playStatus.accept(.play)
+                }
             }
         }).disposed(by: disposeBag)
         
@@ -486,6 +473,7 @@ private extension SatPlayer {
     func bindEvent() {
         controlPanel.sliderValue.subscribe(onNext: { [weak self] value in
             guard let self = self, let duration = self.player?.currentItem?.duration else { return }
+            viewModel.isControlHidden.accept(false)
             let value = Float64(value) * CMTimeGetSeconds(duration)
             if value.isNaN == false {
                 let seekTime = CMTime(value: CMTimeValue(value), timescale: 1)
@@ -517,16 +505,14 @@ private extension SatPlayer {
             }
         }).disposed(by: disposeBag)
         
-        controlPanel.reverseTapped.subscribe(onNext: { [weak self] _ in
+        controlPanel.previousTapped.subscribe(onNext: { [weak self] _ in
             guard let self = self else { return }
-            self.viewModel.isControlHidden.accept(false)
-            self.timeJumpHelper(type: .reverse)
+            self.playPrevious()
         }).disposed(by: disposeBag)
 
-        controlPanel.forwardTapped.subscribe(onNext: { [weak self] _ in
+        controlPanel.nextTapped.subscribe(onNext: { [weak self] _ in
             guard let self = self else { return }
-            self.viewModel.isControlHidden.accept(false)
-            self.timeJumpHelper(type: .forward)
+            self.delegate?.nextTrack()
         }).disposed(by: disposeBag)
     }
     
@@ -536,28 +522,32 @@ private extension SatPlayer {
         tap.numberOfTapsRequired = 1
         tap.delegate = self
         
-//        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
-//        doubleTap.numberOfTapsRequired = 2
-//        doubleTap.delegate = self
-                
-//        tap.require(toFail: doubleTap)
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        doubleTap.delegate = self
         
-        let press = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress))
+        let press = UILongPressGestureRecognizer(target: self, action: #selector(handleViewLongPress))
         press.delegate = self
         
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         pan.delegate = self
         
         self.addGestureRecognizer(tap)
-//        self.addGestureRecognizer(doubleTap)
+        self.addGestureRecognizer(doubleTap)
         self.addGestureRecognizer(press)
         self.addGestureRecognizer(pan)
+        
+        let sliderLongPress = UILongPressGestureRecognizer(target: self, action: #selector(handleSliderLongPress))
+        sliderLongPress.minimumPressDuration = 0.05
+        sliderLongPress.delegate = self
+        controlPanel.sliderCoverView.addGestureRecognizer(sliderLongPress)
     }
     
     // 播放
     func play() {
         guard let player = player else { return }
         player.play()
+        player.rate = defaultSpeed
     }
     
     // 暫停
@@ -585,6 +575,11 @@ private extension SatPlayer {
         let currentTimeInSecond = CMTimeGetSeconds(currentTime)
         let durationTimeInSecond = CMTimeGetSeconds(duration)
         
+        // 監聽是否播放完畢
+        if durationTimeInSecond.isFinite {
+            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) { isPlayFinish?() }
+        }
+        
         controlPanel.updatePlayerTime(currentTimeInSecond: currentTimeInSecond,
                                             durationTimeInSecond: durationTimeInSecond)
         
@@ -600,12 +595,61 @@ private extension SatPlayer {
         }
     }
     
-    // 快轉/倒轉點擊
+    // 快 / 倒轉點擊
     func timeJumpHelper(type: TimeJumpType) {
         guard let currentTime = self.player?.currentTime() else { return }
         let seekTime10Sec = CMTimeGetSeconds(currentTime).advanced(by: type == .forward ? 10 : -10)
         let seekTime = CMTime(value: CMTimeValue(seekTime10Sec), timescale: 1)
         self.viewModel.seekTime.accept(seekTime)
+    }
+    
+    // 播放上一首
+    func playPrevious() {
+        guard let currentTime = player?.currentTime() else { return }
+        let currentTimeInSecond = CMTimeGetSeconds(currentTime)
+        
+        if currentTimeInSecond < 5.0 {
+            delegate?.previousTrack()
+        } else {
+            replayVideo()
+        }
+    }
+    
+    func setupLocalVideoData(data: Data) {
+        if let fileURL = saveDataToTemporaryFile(data: data, fileName: "temporary_video.mp4") {
+            print("DEBUG: setupLocalVideoData - \(fileURL)")
+            // 設定影片資料
+            playerItem = AVPlayerItem(
+                asset: AVAsset(url: fileURL)
+            )
+            
+            playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
+            playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
+            
+            player = AVPlayer(playerItem: playerItem)
+            player?.replaceCurrentItem(with: playerItem)
+            playerLayer.player = player
+            layer.insertSublayer(playerLayer, at: 0)
+
+            // 判斷當前螢幕方向
+            configurePlayerLayout(.portrait)
+            setObserverToPlayer()
+        } else {
+            print("DEBUG: data nil")
+        }
+    }
+            
+    func saveDataToTemporaryFile(data: Data, fileName: String) -> URL? {
+        let tempDirectory = FileManager.default.temporaryDirectory
+        let fileURL = tempDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try data.write(to: fileURL)
+            return fileURL
+        } catch {
+            print("Failed to save data to temporary file: \(error.localizedDescription)")
+            return nil
+        }
     }
 }
 
@@ -620,10 +664,34 @@ private extension SatPlayer {
         switch orientation {
         case .portrait:
             viewModel.orientation.accept(.portrait)
+            reverseSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenWidth / 4)
+                $0.top.left.bottom.equalToSuperview()
+            })
+            forwardSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenWidth / 4)
+                $0.top.right.bottom.equalToSuperview()
+            })
         case .landscapeLeft:
             viewModel.orientation.accept(.landscapeLeft)
+            reverseSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.left.bottom.equalToSuperview()
+            })
+            forwardSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.right.bottom.equalToSuperview()
+            })
         case .landscapeRight:
             viewModel.orientation.accept(.landscapeRight)
+            reverseSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.left.bottom.equalToSuperview()
+            })
+            forwardSkeletonView.snp.remakeConstraints({
+                $0.width.equalTo(screenHeight / 4)
+                $0.top.right.bottom.equalToSuperview()
+            })
         default:
             break
         }
@@ -637,17 +705,30 @@ private extension SatPlayer {
     // 讀取 VTT 檔案
     func loadAndParseSubtitles(from urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let self = self else { return }
-            if let error = error {
+        var content = String()
+        if url.scheme == "file" {
+            // 離線播放，讀取本地字幕
+            do {
+                let data = try String(contentsOf: URL(string: urlString)!)
+                content = data
+            } catch {
                 print("Failed to load subtitles: \(error)")
-                return
             }
+        } else {
+            URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+                guard let self = self else { return }
+                if let error = error {
+                    print("Failed to load subtitles: \(error)")
+                    return
+                }
 
-            guard let data = data, let content = String(data: data, encoding: .utf8) else { return }
-            let parser = WebVTTParser()
-            self.subtitles = parser.parseVTT(content)
-        }.resume()
+                guard let data = data, let data = String(data: data, encoding: .utf8) else { return }
+                content = content
+            }.resume()
+        }
+        
+        let parser = WebVTTParser()
+        self.subtitles = parser.parseVTT(content)
     }
     
     // 依照播放進度更新字幕
@@ -671,12 +752,18 @@ private extension SatPlayer {
     
     // Player 控制面板顯示 / 消失
     @objc func handleSingleTap(_ sender: UITapGestureRecognizer) {
-        viewModel.isControlHidden.accept(!viewModel.isControlHidden.value)
+        // 處理單擊 / 雙擊衝突延遲問題
+        tapCount += 1
+        if tapCount == 1 {
+            tapTimer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(handleTapTimeout), userInfo: nil, repeats: false)
+        }
     }
     
     // 雙擊快轉 / 倒轉
     @objc func handleDoubleTap(_ sender: UITapGestureRecognizer) {
-        viewModel.isControlHidden.accept(false)
+        // 處理單擊 / 雙擊衝突延遲問題
+        tapCount = 0
+        tapTimer?.invalidate()
         let location = sender.location(in: sender.view)
         if let viewWidth = sender.view?.bounds.width {
             timeJumpHelper(type: location.x > viewWidth / 2 ? .forward : .reverse)
@@ -687,6 +774,7 @@ private extension SatPlayer {
                     self.reverseSkeletonView.alpha = 1
                 }
             } completion: { _ in
+                self.viewModel.isControlHidden.accept(true)
                 UIView.animate(withDuration: 0.3, delay: 0.6) {
                     if location.x > viewWidth / 2 {
                         self.forwardSkeletonView.alpha = 0
@@ -698,34 +786,22 @@ private extension SatPlayer {
         }
     }
     
-    // 長按拖曳 Slider Bar
-    @objc func handleLongPress(_ sender: UILongPressGestureRecognizer) {
-        switch sender.state {
-        case .began:
-            HapticFeedbackGenerator.notification(type: .success)
-            initialCenter = sender.location(in: self)
-            initialSliderValue = controlPanel.sliderBar.value
-            viewModel.playStatus.accept(.pause)
-            viewModel.isControlHidden.accept(false)
-        case .changed:
-            let currentLocation = sender.location(in: self)
-            let deltaX = currentLocation.x - initialCenter!.x
-            let sliderWidth = controlPanel.sliderBar.frame.width
-            let sliderRange = controlPanel.sliderBar.maximumValue - controlPanel.sliderBar.minimumValue
-            let deltaValue = Float(deltaX / sliderWidth) * sliderRange
-            
-            controlPanel.sliderBar.value = initialSliderValue + deltaValue
-            controlPanel.sliderBar.value = min(max(controlPanel.sliderBar.value, controlPanel.sliderBar.minimumValue), controlPanel.sliderBar.maximumValue)
-            viewModel.isControlHidden.accept(false)
-        case .ended:
-            controlPanel.sliderBar.sendActions(for: .valueChanged)
-            initialCenter = nil
-            initialSliderValue = 0.0
-            viewModel.playStatus.accept(.play)
-            viewModel.isControlHidden.accept(false)
-        default:
-            break
+    // 處理單擊 / 雙擊衝突延遲問題
+    @objc func handleTapTimeout() {
+        if tapCount == 1 {
+            viewModel.isControlHidden.accept(!viewModel.isControlHidden.value)
         }
+        tapCount = 0
+    }
+    
+    // 長按拖曳 Slider Bar
+    @objc func handleViewLongPress(_ sender: UILongPressGestureRecognizer) {
+        longPressHandler(sender: sender, setHapticFeedback: true)
+    }
+    
+    // 設定 Slider Bar 長按拖曳
+    @objc func handleSliderLongPress(_ sender: UILongPressGestureRecognizer) {
+        longPressHandler(sender: sender, setHapticFeedback: false)
     }
     
     @objc func handlePan(_ sender: UIPanGestureRecognizer) {
@@ -774,6 +850,37 @@ private extension SatPlayer {
             }
         }
     }
+    
+    private func longPressHandler(sender: UILongPressGestureRecognizer, setHapticFeedback: Bool) {
+        switch sender.state {
+        case .began:
+            if setHapticFeedback {
+                HapticFeedbackGenerator.notification(type: .success)
+            }
+            initialCenter = sender.location(in: self)
+            initialSliderValue = controlPanel.sliderBar.value
+            viewModel.playStatus.accept(.pause)
+            viewModel.isControlHidden.accept(false)
+        case .changed:
+            let currentLocation = sender.location(in: self)
+            let deltaX = currentLocation.x - initialCenter!.x
+            let sliderWidth = controlPanel.sliderBar.frame.width
+            let sliderRange = controlPanel.sliderBar.maximumValue - controlPanel.sliderBar.minimumValue
+            let deltaValue = Float(deltaX / sliderWidth) * sliderRange
+            
+            controlPanel.sliderBar.value = initialSliderValue + deltaValue
+            controlPanel.sliderBar.value = min(max(controlPanel.sliderBar.value, controlPanel.sliderBar.minimumValue), controlPanel.sliderBar.maximumValue)
+            viewModel.isControlHidden.accept(false)
+        case .ended:
+            controlPanel.sliderBar.sendActions(for: .valueChanged)
+            initialCenter = nil
+            initialSliderValue = 0.0
+            viewModel.playStatus.accept(.play)
+            viewModel.isControlHidden.accept(false)
+        default:
+            break
+        }
+    }
 }
 
 // MARK: - AirPlay Control
@@ -804,6 +911,8 @@ private extension SatPlayer {
                 currentItem.select(nil, in: legibleGroup)
                 let noSubtitlesOption = AVMediaSelectionOption()
                 currentItem.select(noSubtitlesOption, in: legibleGroup)
+                // 加入 play button 狀態切換機制，防止 AirPlay 選擇畫面未消失的狀態下 UI 無法更新問題
+                self.controlPanel.changePlayButton(status: .play)
             }
         }
         viewModel.playStatus.accept(.play)
@@ -836,6 +945,20 @@ private extension SatPlayer {
 }
 
 extension SatPlayer: UIGestureRecognizerDelegate {
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // 檢查觸摸是否發生在按鈕上
+        let touchView = touch.view
+        if touchView == controlPanel.btnPlay ||
+            touchView == controlPanel.btnPause ||
+            touchView == controlPanel.btnNext ||
+            touchView == controlPanel.btnPrevious ||
+            touchView == controlPanel.btnAirplay ||
+            touchView == controlPanel.btnSetting ||
+            touchView == controlPanel.btnFullScreen {
+            return false
+        }
+        return true
+    }
     // 允許多個手勢同時識別
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         if gestureRecognizer is UILongPressGestureRecognizer && otherGestureRecognizer is UIPanGestureRecognizer {
@@ -852,7 +975,6 @@ extension SatPlayer: NowPlayingHelperDelegate {
     }
     
     func seekTime(_ seekTime: CMTime) {
-        self.viewModel.playStatus.accept(.pause)
         self.viewModel.seekTime.accept(seekTime)
     }
     
@@ -861,14 +983,6 @@ extension SatPlayer: NowPlayingHelperDelegate {
     }
     
     func previousTrack() {
-        guard let currentTime = player?.currentTime() else { return }
-        let currentTimeInSecond = CMTimeGetSeconds(currentTime)
-        
-        if currentTimeInSecond < 5.0 {
-            delegate?.previousTrack()
-        } else {
-            let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-            self.viewModel.seekTime.accept(newTime)
-        }
+        playPrevious()
     }
 }

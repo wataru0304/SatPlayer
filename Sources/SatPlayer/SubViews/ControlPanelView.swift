@@ -34,12 +34,12 @@ class ControlPanelView: UIView {
         return btnPlay.rx.tap
     }
     
-    var reverseTapped: ControlEvent<Void> {
-        return btnReverse.rx.tap
+    var previousTapped: ControlEvent<Void> {
+        return btnPrevious.rx.tap
     }
     
-    var forwardTapped: ControlEvent<Void> {
-        return btnForward.rx.tap
+    var nextTapped: ControlEvent<Void> {
+        return btnNext.rx.tap
     }
     
     var fullScreenTapped: ControlEvent<Void> {
@@ -54,34 +54,34 @@ class ControlPanelView: UIView {
         .numberOfLines(1)
         .textColor(.white)
     
-    private lazy var btnAirplay: AVRoutePickerView = {
+    lazy var btnAirplay: AVRoutePickerView = {
         let rp = AVRoutePickerView()
         rp.activeTintColor = .white
         rp.tintColor = .white
         return rp
     }()
     
-    private lazy var btnSetting = UIButton()
+    lazy var btnSetting = UIButton()
         .image(loadImage(named: "setting")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
     // header
     
     // Control Button
-    private lazy var btnReverse: UIButton = {
+    lazy var btnPrevious: UIButton = {
         let btn = UIButton()
-            .image(loadImage(named: "backward")!.withRenderingMode(.alwaysTemplate), for: .normal)
+            .image(loadImage(named: "previous-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
         btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         return btn
     }()
 
-    private lazy var btnPlay = UIButton()
+    lazy var btnPlay = UIButton()
         .image(loadImage(named: "play")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
         .backgroundColor(.black.withAlphaComponent(0.2))
         .cornerRadius(24)
     
-    private lazy var btnPause = UIButton()
+    lazy var btnPause = UIButton()
         .image(loadImage(named: "pause")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
         .backgroundColor(.black.withAlphaComponent(0.2))
@@ -89,15 +89,15 @@ class ControlPanelView: UIView {
         .isHidden(true)
     
     
-    private lazy var btnForward: UIButton = {
+    lazy var btnNext: UIButton = {
         let btn = UIButton()
-            .image(loadImage(named: "forward")!.withRenderingMode(.alwaysTemplate), for: .normal)
+            .image(loadImage(named: "next-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
         btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
         return btn
     }()
     
-    private lazy var btnStack = UIStackView(arrangedSubviews: [btnReverse, btnPlay, btnPause, btnForward])
+    private lazy var btnStack = UIStackView(arrangedSubviews: [btnPrevious, btnPlay, btnPause, btnNext])
         .axis(.horizontal)
         .spacing(32)
         .alignment(.center)
@@ -108,6 +108,9 @@ class ControlPanelView: UIView {
         .text("--:--")
         .font(.systemFont(ofSize: 12))
         .textColor(.white)
+    
+    lazy var sliderCoverView = UIView()
+        .backgroundColor(.clear)
     
     lazy var sliderBar: BufferSlider = {
         let sb = BufferSlider()
@@ -130,7 +133,7 @@ class ControlPanelView: UIView {
         .spacing(6)
         .alignment(.center)
     
-    private lazy var btnFullScreen = UIButton()
+    lazy var btnFullScreen = UIButton()
         .image(loadImage(named: "fullScreen")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
     // footer
@@ -166,6 +169,17 @@ class ControlPanelView: UIView {
     
     func updateBufferProgress(bufferProgress: Float) {
         sliderBar.bufferProgress = bufferProgress
+    }
+    
+    func changePlayButton(status: PlayStatus) {
+        switch status {
+        case .play:
+            self.btnPlay.isHidden = true
+            self.btnPause.isHidden = false
+        case .pause:
+            self.btnPlay.isHidden = false
+            self.btnPause.isHidden = true
+        }
     }
 }
 
@@ -207,6 +221,7 @@ private extension ControlPanelView {
         // Footer
         addSubview(btnFullScreen)
         addSubview(progressStack)
+        addSubview(sliderCoverView)
 
         btnFullScreen.snp.makeConstraints({
             $0.bottom.right.equalToSuperview().inset(12)
@@ -215,6 +230,11 @@ private extension ControlPanelView {
             $0.centerY.equalTo(btnFullScreen.snp.centerY)
             $0.left.equalToSuperview().inset(12)
             $0.right.equalTo(btnFullScreen.snp.left).offset(-12)
+        })
+        sliderCoverView.snp.makeConstraints({
+            $0.left.right.equalTo(progressStack)
+            $0.centerY.equalTo(progressStack)
+            $0.height.equalTo(40)
         })
         // Footer
     }
@@ -268,14 +288,7 @@ private extension ControlPanelView {
         
         viewModel.playStatus.subscribe(onNext: { [weak self] status in
             guard let self = self else { return }
-            switch status {
-            case .play:
-                self.btnPlay.isHidden = true
-                self.btnPause.isHidden = false
-            case .pause:
-                self.btnPlay.isHidden = false
-                self.btnPause.isHidden = true
-            }
+            self.changePlayButton(status: status)
         }).disposed(by: disposeBag)
     }
     
