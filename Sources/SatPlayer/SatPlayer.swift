@@ -15,6 +15,8 @@ public protocol SatPlayerDelegate: AnyObject {
     func previousTrack()
     /// control panel 設定按鈕點擊事件回調
     func setting()
+    
+    func playingFinish()
 }
 
 public class SatPlayer: UIView {
@@ -277,6 +279,9 @@ public class SatPlayer: UIView {
             player.removeTimeObserver(self.subTitleObserver as Any)
             self.subTitleObserver = nil
         }
+        
+        playerItem!.removeObserver(self, forKeyPath: "status")
+        playerItem!.removeObserver(self, forKeyPath: "loadedTimeRanges")
         
         viewModel.isControlHidden.accept(true)
         viewModel.seekTime.accept(CMTime())
@@ -569,6 +574,14 @@ private extension SatPlayer {
         
         let currentTimeInSecond = CMTimeGetSeconds(currentTime)
         let durationTimeInSecond = CMTimeGetSeconds(duration)
+        
+        // 監聽是否播放完畢
+        if durationTimeInSecond.isFinite {
+            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) {
+                delegate?.playingFinish()
+            }
+        }
+
         
         controlPanel.updatePlayerTime(currentTimeInSecond: currentTimeInSecond,
                                             durationTimeInSecond: durationTimeInSecond)
