@@ -11,7 +11,7 @@ import UIKit
 import AVFoundation
 
 class PlayerViewModel {
-    var playStatus = BehaviorRelay<PlayStatus>(value: .pause)
+    var playStatus = BehaviorRelay<PlayStatus>(value: .play)
     var isLoading = BehaviorRelay<Bool>(value: false)
     var deviceOrientation = BehaviorRelay<UIInterfaceOrientation>(value: .portrait)
     var isControlHidden = BehaviorRelay<Bool>(value: true)

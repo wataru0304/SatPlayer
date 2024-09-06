@@ -15,13 +15,14 @@ public protocol SatPlayerDelegate: AnyObject {
     func previousTrack()
     /// control panel 設定按鈕點擊事件回調
     func setting()
+    /// 結束播放
+    func playFinish()
 }
 
 public class SatPlayer: UIView {
     
     // MARK: - Public Properties
     public weak var delegate: SatPlayerDelegate?
-    public var isPlayFinish: (() -> Void)?
     
     // MARK: - Private Properteis
     private let disposeBag = DisposeBag()
@@ -336,7 +337,6 @@ public class SatPlayer: UIView {
         let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         self.viewModel.seekTime.accept(newTime)
         viewModel.playStatus.accept(.play)
-        
     }
 }
 
@@ -574,10 +574,12 @@ private extension SatPlayer {
         
         let currentTimeInSecond = CMTimeGetSeconds(currentTime)
         let durationTimeInSecond = CMTimeGetSeconds(duration)
-        
+
         // 監聽是否播放完畢
         if durationTimeInSecond.isFinite {
-            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) { isPlayFinish?() }
+            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) {
+                delegate?.playFinish()
+            }
         }
         
         controlPanel.updatePlayerTime(currentTimeInSecond: currentTimeInSecond,
@@ -705,12 +707,12 @@ private extension SatPlayer {
     // 讀取 VTT 檔案
     func loadAndParseSubtitles(from urlString: String) {
         guard let url = URL(string: urlString) else { return }
-        var content = String()
         if url.scheme == "file" {
             // 離線播放，讀取本地字幕
             do {
                 let data = try String(contentsOf: URL(string: urlString)!)
-                content = data
+                let parser = WebVTTParser()
+                self.subtitles = parser.parseVTT(data)
             } catch {
                 print("Failed to load subtitles: \(error)")
             }
@@ -722,13 +724,11 @@ private extension SatPlayer {
                     return
                 }
 
-                guard let data = data, let data = String(data: data, encoding: .utf8) else { return }
-                content = content
+                guard let data = data, let content = String(data: data, encoding: .utf8) else { return }
+                let parser = WebVTTParser()
+                self.subtitles = parser.parseVTT(content)
             }.resume()
         }
-        
-        let parser = WebVTTParser()
-        self.subtitles = parser.parseVTT(content)
     }
     
     // 依照播放進度更新字幕
