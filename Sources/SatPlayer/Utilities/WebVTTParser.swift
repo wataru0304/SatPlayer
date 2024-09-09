@@ -62,7 +62,6 @@ class WebVTTParser {
     
     private func parseTimeInterval(_ string: String) -> TimeInterval? {
         let components = string.components(separatedBy: ":")
-        print("DEBUG: components.count: \(components.count)")
         if components.count == 2 {
             let minutes = Double(components[0]) ?? 0
             let secondsComponents = components[1].components(separatedBy: ".")
