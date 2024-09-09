@@ -57,10 +57,13 @@ public class SatPlayer: UIView {
     
     // 是否開啟快轉模式
     private var fastForwardOn = false
+    private var fastReverseOn = false
     // 快轉模式計時器
     private var fastForwardTimer: Timer?
+    private var fastReverseTimer: Timer?
     // 快轉次數
     private var fastForwardCount = 1
+    private var fastReverseCount = 1
     
     // MARK: - SubViews
     private lazy var loadingView: UIActivityIndicatorView = {
@@ -353,9 +356,19 @@ private extension SatPlayer {
         // 設定中心起始點
         self.layer.anchorPoint = CGPoint(x: 0.5, y: 1.0)
         
+        panelContrainer.addSubview(controlPanel)
+        panelContrainer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 211.scale(.height))
+        addSubview(panelContrainer)
+        
+        
+        controlPanel.snp.makeConstraints({
+            $0.edges.equalToSuperview()
+        })
+        
         // Anthor control
         reverseSkeletonView.addSubview(lbReverse10sec)
         addSubview(reverseSkeletonView)
+        
         forwardSkeletonView.addSubview(lbForward10sec)
         addSubview(forwardSkeletonView)
         
@@ -378,16 +391,7 @@ private extension SatPlayer {
         // Anthor control
         
         addSubview(subtitleView)
-        
-        panelContrainer.addSubview(controlPanel)
-        panelContrainer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 211.scale(.height))
-        addSubview(panelContrainer)
         addSubview(loadingView)
-        
-        controlPanel.snp.makeConstraints({
-            $0.edges.equalToSuperview()
-        })
-   
         subtitleView.snp.makeConstraints({
             $0.bottom.equalToSuperview().inset(24)
             $0.centerX.equalToSuperview()
@@ -396,7 +400,6 @@ private extension SatPlayer {
         loadingView.snp.makeConstraints({
             $0.center.equalToSuperview()
         })
-        
         setupGesture()
     }
     
@@ -766,7 +769,7 @@ private extension SatPlayer {
     // Player 控制面板顯示 / 消失
     @objc func handleSingleTap(_ sender: UITapGestureRecognizer) {
         // 如果目前啟用快 / 倒轉，則忽略 Player 單擊事件
-        if fastForwardOn {
+        if fastForwardOn || fastReverseOn {
             return
         }
         
@@ -782,20 +785,24 @@ private extension SatPlayer {
         // 處理單擊 / 雙擊衝突延遲問題
         tapCount = 0
         tapTimer?.invalidate()
-        // 啟用快 / 倒轉功能
-        fastForwardOn = true
         let location = sender.location(in: sender.view)
         if let viewWidth = sender.view?.bounds.width {
             timeJumpHelper(type: location.x > viewWidth / 2 ? .forward : .reverse)
             UIView.animate(withDuration: 0.3) {
                 if location.x > viewWidth / 2 {
+                    // 啟用快轉功能
+                    self.fastForwardOn = true
                     self.forwardSkeletonView.alpha = 1
                     // 啟用快轉模式計時器
+                    self.fastForwardTimer?.invalidate()
                     self.fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(self.handleForwardOff), userInfo: nil, repeats: false)
                 } else {
+                    // 啟用倒轉功能
+                    self.fastReverseOn = true
                     self.reverseSkeletonView.alpha = 1
                     // 啟用倒轉模式計時器
-                    self.fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(self.handleReverseOff), userInfo: nil, repeats: false)
+                    self.fastReverseTimer?.invalidate()
+                    self.fastReverseTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(self.handleReverseOff), userInfo: nil, repeats: false)
                 }
             } completion: { _ in
                 self.viewModel.isControlHidden.accept(true)
@@ -806,16 +813,17 @@ private extension SatPlayer {
     // 倒轉單擊事件
     @objc func handleTapReverse() {
         // 倒轉次數 + 1
-        fastForwardCount += 1
+        fastReverseCount += 1
         timeJumpHelper(type: .reverse)
         // reset reverse text
-        lbReverse10sec.text = "<< \n\(10 * self.fastForwardCount) sec"
-        fastForwardTimer?.invalidate()
-        fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(handleReverseOff), userInfo: nil, repeats: false)
+        lbReverse10sec.text = "<< \n\(10 * self.fastReverseCount) sec"
+        fastReverseTimer?.invalidate()
+        fastReverseTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(handleReverseOff), userInfo: nil, repeats: false)
     }
     
     // 快轉單擊事件
     @objc func handleTapForward() {
+        print("DEBUG: forward tap ......")
         // 快轉次數 + 1
         fastForwardCount += 1
         timeJumpHelper(type: .forward)
@@ -829,11 +837,12 @@ private extension SatPlayer {
     @objc func handleReverseOff() {
         UIView.animate(withDuration: 0.3) {
             self.reverseSkeletonView.alpha = 0
-            self.fastForwardOn = false
+            self.fastReverseOn = false
         } completion: { _ in
             // reset count & timer
             self.fastForwardCount = 1
-            self.fastForwardTimer?.invalidate()
+            self.lbReverse10sec.text = "<< \n\(10 * self.fastReverseCount) sec"
+            self.fastReverseTimer?.invalidate()
         }
         
     }
@@ -845,6 +854,7 @@ private extension SatPlayer {
         } completion: { _ in
             // reset count & timer
             self.fastForwardCount = 1
+            self.lbForward10sec.text = ">> \n\(10 * self.fastForwardCount) sec"
             self.fastForwardTimer?.invalidate()
         }
     }
