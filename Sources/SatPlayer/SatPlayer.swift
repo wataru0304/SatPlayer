@@ -379,11 +379,10 @@ private extension SatPlayer {
             $0.top.right.bottom.equalToSuperview()
         })
         // Anthor control
-        
+        addSubview(subtitleView)
         panelContrainer.addSubview(controlPanel)
         panelContrainer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 211.scale(.height))
         addSubview(panelContrainer)
-        addSubview(subtitleView)
         addSubview(loadingView)
         
         controlPanel.snp.makeConstraints({
