@@ -13,6 +13,7 @@ class PlayerTexttrackView: UIView {
         .font(.systemFont(ofSize: 16))
         .textColor(.white)
         .textAlignment(.center)
+        .numberOfLines(0)
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -21,6 +22,7 @@ class PlayerTexttrackView: UIView {
         
         addSubview(lbSubtitle)
         lbSubtitle.snp.makeConstraints({
+            $0.width.lessThanOrEqualTo(UIScreen.main.bounds.width - 40)
             $0.edges.equalToSuperview().inset(UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8))
         })
     }
@@ -30,6 +32,11 @@ class PlayerTexttrackView: UIView {
     }
     
     func setSubtitle(_ subtitle: String) {
-        lbSubtitle.text = subtitle
+        if let rangeOfLastLine = subtitle.range(of: "\n", options: .backwards) {
+            let cleanedString = subtitle.replacingCharacters(in: rangeOfLastLine, with: "")
+            lbSubtitle.text = cleanedString
+        } else {
+            lbSubtitle.text = subtitle
+        }
     }
 }
