@@ -55,6 +55,13 @@ public class SatPlayer: UIView {
     private var tapCount = 0
     private var tapTimer: Timer?
     
+    // 是否開啟快轉模式
+    private var fastForwardOn = false
+    // 快轉模式計時器
+    private var fastForwardTimer: Timer?
+    // 快轉次數
+    private var fastForwardCount = 1
+    
     // MARK: - SubViews
     private lazy var loadingView: UIActivityIndicatorView = {
         let ai = UIActivityIndicatorView(style: .medium)
@@ -541,6 +548,12 @@ private extension SatPlayer {
         sliderLongPress.minimumPressDuration = 0.05
         sliderLongPress.delegate = self
         controlPanel.sliderCoverView.addGestureRecognizer(sliderLongPress)
+        
+        // 設定快 / 倒轉單擊事件
+        let tapReverse = UITapGestureRecognizer(target: self, action: #selector(handleTapReverse))
+        let tapForward = UITapGestureRecognizer(target: self, action: #selector(handleTapForward))
+        reverseSkeletonView.addGestureRecognizer(tapReverse)
+        forwardSkeletonView.addGestureRecognizer(tapForward)
     }
     
     // 播放
@@ -752,6 +765,11 @@ private extension SatPlayer {
     
     // Player 控制面板顯示 / 消失
     @objc func handleSingleTap(_ sender: UITapGestureRecognizer) {
+        // 如果目前啟用快 / 倒轉，則忽略 Player 單擊事件
+        if fastForwardOn {
+            return
+        }
+        
         // 處理單擊 / 雙擊衝突延遲問題
         tapCount += 1
         if tapCount == 1 {
@@ -764,25 +782,70 @@ private extension SatPlayer {
         // 處理單擊 / 雙擊衝突延遲問題
         tapCount = 0
         tapTimer?.invalidate()
+        // 啟用快 / 倒轉功能
+        fastForwardOn = true
         let location = sender.location(in: sender.view)
         if let viewWidth = sender.view?.bounds.width {
             timeJumpHelper(type: location.x > viewWidth / 2 ? .forward : .reverse)
             UIView.animate(withDuration: 0.3) {
                 if location.x > viewWidth / 2 {
                     self.forwardSkeletonView.alpha = 1
+                    // 啟用快轉模式計時器
+                    self.fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(self.handleForwardOff), userInfo: nil, repeats: false)
                 } else {
                     self.reverseSkeletonView.alpha = 1
+                    // 啟用倒轉模式計時器
+                    self.fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(self.handleReverseOff), userInfo: nil, repeats: false)
                 }
             } completion: { _ in
                 self.viewModel.isControlHidden.accept(true)
-                UIView.animate(withDuration: 0.3, delay: 0.6) {
-                    if location.x > viewWidth / 2 {
-                        self.forwardSkeletonView.alpha = 0
-                    } else {
-                        self.reverseSkeletonView.alpha = 0
-                    }
-                }
             }
+        }
+    }
+    
+    // 倒轉單擊事件
+    @objc func handleTapReverse() {
+        // 倒轉次數 + 1
+        fastForwardCount += 1
+        timeJumpHelper(type: .reverse)
+        // reset reverse text
+        lbReverse10sec.text = "<< \n\(10 * self.fastForwardCount) sec"
+        fastForwardTimer?.invalidate()
+        fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(handleReverseOff), userInfo: nil, repeats: false)
+    }
+    
+    // 快轉單擊事件
+    @objc func handleTapForward() {
+        // 快轉次數 + 1
+        fastForwardCount += 1
+        timeJumpHelper(type: .forward)
+        // reset forward text
+        lbForward10sec.text = ">> \n\(10 * self.fastForwardCount) sec"
+        fastForwardTimer?.invalidate()
+        fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(handleForwardOff), userInfo: nil, repeats: false)
+    }
+    
+    // 倒轉模式關閉事件
+    @objc func handleReverseOff() {
+        UIView.animate(withDuration: 0.3) {
+            self.reverseSkeletonView.alpha = 0
+            self.fastForwardOn = false
+        } completion: { _ in
+            // reset count & timer
+            self.fastForwardCount = 1
+            self.fastForwardTimer?.invalidate()
+        }
+        
+    }
+    // 快轉模式關閉事件
+    @objc func handleForwardOff() {
+        UIView.animate(withDuration: 0.3) {
+            self.forwardSkeletonView.alpha = 0
+            self.fastForwardOn = false
+        } completion: { _ in
+            // reset count & timer
+            self.fastForwardCount = 1
+            self.fastForwardTimer?.invalidate()
         }
     }
     
