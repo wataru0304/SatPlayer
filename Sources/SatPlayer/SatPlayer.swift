@@ -270,6 +270,7 @@ public class SatPlayer: UIView {
     /// - rate: 影片播放速度
     public func speedSetting(rate: Float) {
         guard let player = player else { return }
+        defaultSpeed = rate
         player.rate = rate
     }
     
@@ -755,6 +756,7 @@ private extension SatPlayer {
     @objc func applicationWillEnterForeground() {
         // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
         playerLayer.player = player
+        speedSetting(rate: self.defaultSpeed)
     }
     
     // Player 控制面板顯示 / 消失
