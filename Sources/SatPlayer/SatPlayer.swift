@@ -33,6 +33,9 @@ public class SatPlayer: UIView {
     private var initialCenter: CGPoint?
     private var initialSliderValue: Float = 0.0
     private var initialTransform: CGAffineTransform = .identity
+    
+    // 向上滑動 player view 放大數值
+    private var panScale: CGFloat = 0.0
 
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
@@ -600,7 +603,11 @@ private extension SatPlayer {
         if let duration = player?.currentItem?.duration {
             let durationTimeInSecond = CMTimeGetSeconds(duration)
             if durationTimeInSecond.isFinite {
-                controlPanel.setTotalTime("\(Int(durationTimeInSecond).secondToMS())")
+                if currentTimeInSecond >= 3600 {
+                    controlPanel.setTotalTime("\(Int(durationTimeInSecond).secondToHMS())")
+                } else{
+                    controlPanel.setTotalTime("\(Int(durationTimeInSecond).secondToMS())")
+                }
             } else {
                 controlPanel.setTotalTime("00:00")
             }
@@ -849,8 +856,8 @@ private extension SatPlayer {
             case .changed:
                 if translation.y < 0 {
                     if currentOrientation == .portrait {
-                        let scale = min(1.0 + abs(translation.y) / 200, 1.3)
-                        self.transform = initialTransform.scaledBy(x: scale, y: scale)
+                        panScale = min(1.0 + abs(translation.y) / 200, 1.3)
+                        self.transform = initialTransform.scaledBy(x: panScale, y: panScale)
                     }
                 } else {
                     if currentOrientation == .landscapeLeft || currentOrientation == .landscapeRight {
@@ -860,9 +867,8 @@ private extension SatPlayer {
                     }
                 }
             case .ended:
-                self.transform = initialTransform
                 if translation.y < 0 {
-                    if currentOrientation == .portrait {
+                    if panScale >= 1.3 && currentOrientation == .portrait {
                         let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .landscapeRight)
                         windowScene.requestGeometryUpdate(geometryPreferences) { error in
                             debugPrint("Error updating geometry: \(error.localizedDescription)")
@@ -876,6 +882,7 @@ private extension SatPlayer {
                         }
                     }
                 }
+                self.transform = initialTransform
             default:
                 break
             }
