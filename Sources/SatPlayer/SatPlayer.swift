@@ -465,9 +465,13 @@ private extension SatPlayer {
         viewModel.vttUrl.subscribe(onNext: { [weak self] vttUrl in
             guard let self = self else { return }
             if let vttUrl = vttUrl {
-                self.loadAndParseSubtitles(from: vttUrl)
+                WebVTTParser.shared.loadAndParseSubtitles(from: vttUrl) { [weak self] subtitles in
+                    guard let self = self else { return }
+                    self.subtitles = subtitles
+                }
                 self.subTitleObserver = self.player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] time in
-                    self?.updateSubtitles(for: time.seconds)
+                    guard let self = self else { return }
+                    self.subtitleView.setSubtitle(WebVTTParser.shared.updateSubtitles(for: time.seconds, subtitles: self.subtitles))
                 }
                 self.subtitleView.isHidden = false
             } else {
@@ -707,42 +711,6 @@ private extension SatPlayer {
         }
         
         layoutIfNeeded()
-    }
-}
-
-// MARK: - VTT Helper
-private extension SatPlayer {
-    // 讀取 VTT 檔案
-    func loadAndParseSubtitles(from urlString: String) {
-        guard let url = URL(string: urlString) else { return }
-        if url.scheme == "file" {
-            // 離線播放，讀取本地字幕
-            do {
-                let data = try String(contentsOf: URL(string: urlString)!)
-                let parser = WebVTTParser()
-                self.subtitles = parser.parseVTT(data)
-            } catch {
-                print("Failed to load subtitles: \(error)")
-            }
-        } else {
-            URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-                guard let self = self else { return }
-                if let error = error {
-                    print("Failed to load subtitles: \(error)")
-                    return
-                }
-
-                guard let data = data, let content = String(data: data, encoding: .utf8) else { return }
-                let parser = WebVTTParser()
-                self.subtitles = parser.parseVTT(content)
-            }.resume()
-        }
-    }
-    
-    // 依照播放進度更新字幕
-    func updateSubtitles(for currentTime: TimeInterval) {
-        let currentSubtitle = subtitles.first { currentTime >= $0.startTime && currentTime <= $0.endTime }
-        subtitleView.setSubtitle(currentSubtitle?.text ?? "")
     }
 }
 
