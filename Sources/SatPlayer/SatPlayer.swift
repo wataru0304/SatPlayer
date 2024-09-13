@@ -16,7 +16,8 @@ public protocol SatPlayerDelegate: AnyObject {
     /// control panel 設定按鈕點擊事件回調
     func setting()
     
-    func playingFinish()
+    /// 結束播放
+    func playFinish()
 }
 
 public class SatPlayer: UIView {
@@ -33,6 +34,9 @@ public class SatPlayer: UIView {
     private var initialCenter: CGPoint?
     private var initialSliderValue: Float = 0.0
     private var initialTransform: CGAffineTransform = .identity
+    
+    // 向上滑動 player view 放大數值
+    private var panScale: CGFloat = 0.0
 
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
@@ -54,6 +58,16 @@ public class SatPlayer: UIView {
     // 處理單擊 / 雙擊衝突延遲問題
     private var tapCount = 0
     private var tapTimer: Timer?
+    
+    // 是否開啟快轉模式
+    private var fastForwardOn = false
+    private var fastReverseOn = false
+    // 快轉模式計時器
+    private var fastForwardTimer: Timer?
+    private var fastReverseTimer: Timer?
+    // 快轉次數
+    private var fastForwardCount = 1
+    private var fastReverseCount = 1
     
     // MARK: - SubViews
     private lazy var loadingView: UIActivityIndicatorView = {
@@ -258,6 +272,7 @@ public class SatPlayer: UIView {
     /// - rate: 影片播放速度
     public func speedSetting(rate: Float) {
         guard let player = player else { return }
+        defaultSpeed = rate
         player.rate = rate
     }
     
@@ -335,7 +350,6 @@ public class SatPlayer: UIView {
         let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         self.viewModel.seekTime.accept(newTime)
         viewModel.playStatus.accept(.play)
-        
     }
 }
 
@@ -347,10 +361,8 @@ private extension SatPlayer {
         
         // Anthor control
         reverseSkeletonView.addSubview(lbReverse10sec)
-        addSubview(reverseSkeletonView)
         forwardSkeletonView.addSubview(lbForward10sec)
-        addSubview(forwardSkeletonView)
-        
+
         lbReverse10sec.snp.makeConstraints({
             $0.center.equalToSuperview()
         })
@@ -359,6 +371,8 @@ private extension SatPlayer {
             $0.center.equalToSuperview()
         })
 
+        addSubview(reverseSkeletonView)
+        addSubview(forwardSkeletonView)
         reverseSkeletonView.snp.makeConstraints({
             $0.width.equalTo(UIScreen.main.bounds.width / 4)
             $0.top.left.bottom.equalToSuperview()
@@ -368,9 +382,7 @@ private extension SatPlayer {
             $0.top.right.bottom.equalToSuperview()
         })
         // Anthor control
-        
         addSubview(subtitleView)
-        
         panelContrainer.addSubview(controlPanel)
         panelContrainer.frame = CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 211.scale(.height))
         addSubview(panelContrainer)
@@ -379,7 +391,7 @@ private extension SatPlayer {
         controlPanel.snp.makeConstraints({
             $0.edges.equalToSuperview()
         })
-   
+        
         subtitleView.snp.makeConstraints({
             $0.bottom.equalToSuperview().inset(24)
             $0.centerX.equalToSuperview()
@@ -388,7 +400,6 @@ private extension SatPlayer {
         loadingView.snp.makeConstraints({
             $0.center.equalToSuperview()
         })
-        
         setupGesture()
     }
     
@@ -456,9 +467,13 @@ private extension SatPlayer {
         viewModel.vttUrl.subscribe(onNext: { [weak self] vttUrl in
             guard let self = self else { return }
             if let vttUrl = vttUrl {
-                self.loadAndParseSubtitles(from: vttUrl)
+                WebVTTParser.shared.loadAndParseSubtitles(from: vttUrl) { [weak self] subtitles in
+                    guard let self = self else { return }
+                    self.subtitles = subtitles
+                }
                 self.subTitleObserver = self.player?.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] time in
-                    self?.updateSubtitles(for: time.seconds)
+                    guard let self = self else { return }
+                    self.subtitleView.setSubtitle(WebVTTParser.shared.updateSubtitles(for: time.seconds, subtitles: self.subtitles))
                 }
                 self.subtitleView.isHidden = false
             } else {
@@ -574,11 +589,11 @@ private extension SatPlayer {
         
         let currentTimeInSecond = CMTimeGetSeconds(currentTime)
         let durationTimeInSecond = CMTimeGetSeconds(duration)
-        
+
         // 監聽是否播放完畢
         if durationTimeInSecond.isFinite {
             if Int(currentTimeInSecond) >= Int(durationTimeInSecond) {
-                delegate?.playingFinish()
+                delegate?.playFinish()
             }
         }
 
@@ -589,7 +604,11 @@ private extension SatPlayer {
         if let duration = player?.currentItem?.duration {
             let durationTimeInSecond = CMTimeGetSeconds(duration)
             if durationTimeInSecond.isFinite {
-                controlPanel.setTotalTime("\(Int(durationTimeInSecond).secondToMS())")
+                if currentTimeInSecond >= 3600 {
+                    controlPanel.setTotalTime("\(Int(durationTimeInSecond).secondToHMS())")
+                } else{
+                    controlPanel.setTotalTime("\(Int(durationTimeInSecond).secondToMS())")
+                }
             } else {
                 controlPanel.setTotalTime("00:00")
             }
@@ -666,31 +685,6 @@ private extension SatPlayer {
     }
 }
 
-// MARK: - VTT Helper
-private extension SatPlayer {
-    // 讀取 VTT 檔案
-    func loadAndParseSubtitles(from urlString: String) {
-        guard let url = URL(string: urlString) else { return }
-        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
-            guard let self = self else { return }
-            if let error = error {
-                print("Failed to load subtitles: \(error)")
-                return
-            }
-
-            guard let data = data, let content = String(data: data, encoding: .utf8) else { return }
-            let parser = WebVTTParser()
-            self.subtitles = parser.parseVTT(content)
-        }.resume()
-    }
-    
-    // 依照播放進度更新字幕
-    func updateSubtitles(for currentTime: TimeInterval) {
-        let currentSubtitle = subtitles.first { currentTime >= $0.startTime && currentTime <= $0.endTime }
-        subtitleView.setSubtitle(currentSubtitle?.text ?? "")
-    }
-}
-
 // MARK: - Selectors
 private extension SatPlayer {
     @objc func applicationDidEnterBackground() {
@@ -701,10 +695,36 @@ private extension SatPlayer {
     @objc func applicationWillEnterForeground() {
         // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
         playerLayer.player = player
+        speedSetting(rate: self.defaultSpeed)
     }
     
     // Player 控制面板顯示 / 消失
     @objc func handleSingleTap(_ sender: UITapGestureRecognizer) {
+        // 如果目前啟用快 / 倒轉，則忽略 Player 單擊事件
+        if fastForwardOn || fastReverseOn {
+            let location = sender.location(in: sender.view)
+            if let viewWidth = sender.view?.bounds.width {
+                if location.x > viewWidth / 2 {
+                    // 快轉次數 + 1
+                    fastForwardCount += 1
+                    timeJumpHelper(type: .forward)
+                    // reset forward text
+                    lbForward10sec.text = ">> \n\(10 * self.fastForwardCount) sec"
+                    fastForwardTimer?.invalidate()
+                    fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(handleForwardOff), userInfo: nil, repeats: false)
+                } else {
+                    // 倒轉次數 + 1
+                    fastReverseCount += 1
+                    timeJumpHelper(type: .reverse)
+                    // reset reverse text
+                    lbReverse10sec.text = "<< \n\(10 * self.fastReverseCount) sec"
+                    fastReverseTimer?.invalidate()
+                    fastReverseTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(handleReverseOff), userInfo: nil, repeats: false)
+                }
+            }
+            return
+        }
+        
         // 處理單擊 / 雙擊衝突延遲問題
         tapCount += 1
         if tapCount == 1 {
@@ -722,20 +742,49 @@ private extension SatPlayer {
             timeJumpHelper(type: location.x > viewWidth / 2 ? .forward : .reverse)
             UIView.animate(withDuration: 0.3) {
                 if location.x > viewWidth / 2 {
+                    // 啟用快轉功能
+                    self.fastForwardOn = true
                     self.forwardSkeletonView.alpha = 1
+                    // 啟用快轉模式計時器
+                    self.fastForwardTimer?.invalidate()
+                    self.fastForwardTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(self.handleForwardOff), userInfo: nil, repeats: false)
                 } else {
+                    // 啟用倒轉功能
+                    self.fastReverseOn = true
                     self.reverseSkeletonView.alpha = 1
+                    // 啟用倒轉模式計時器
+                    self.fastReverseTimer?.invalidate()
+                    self.fastReverseTimer = Timer.scheduledTimer(timeInterval: 0.8, target: self, selector: #selector(self.handleReverseOff), userInfo: nil, repeats: false)
                 }
             } completion: { _ in
                 self.viewModel.isControlHidden.accept(true)
-                UIView.animate(withDuration: 0.3, delay: 0.6) {
-                    if location.x > viewWidth / 2 {
-                        self.forwardSkeletonView.alpha = 0
-                    } else {
-                        self.reverseSkeletonView.alpha = 0
-                    }
-                }
             }
+        }
+    }
+    
+    // 倒轉模式關閉事件
+    @objc func handleReverseOff() {
+        UIView.animate(withDuration: 0.3) {
+            self.reverseSkeletonView.alpha = 0
+            self.fastReverseOn = false
+        } completion: { _ in
+            // reset count & timer
+            self.fastReverseCount = 1
+            self.lbReverse10sec.text = "<< \n\(10 * self.fastReverseCount) sec"
+            self.fastReverseTimer?.invalidate()
+        }
+        
+    }
+    // 快轉模式關閉事件
+    @objc func handleForwardOff() {
+        UIView.animate(withDuration: 0.3) {
+            self.forwardSkeletonView.alpha = 0
+            self.fastForwardOn = false
+        } completion: { _ in
+            // reset count & timer
+            self.fastForwardCount = 1
+            self.lbForward10sec.text = ">> \n\(10 * self.fastForwardCount) sec"
+            self.fastForwardTimer?.invalidate()
         }
     }
     
@@ -771,8 +820,8 @@ private extension SatPlayer {
             case .changed:
                 if translation.y < 0 {
                     if currentOrientation == .portrait {
-                        let scale = min(1.0 + abs(translation.y) / 200, 1.3)
-                        self.transform = initialTransform.scaledBy(x: scale, y: scale)
+                        panScale = min(1.0 + abs(translation.y) / 200, 1.3)
+                        self.transform = initialTransform.scaledBy(x: panScale, y: panScale)
                     }
                 } else {
                     if currentOrientation == .landscapeLeft || currentOrientation == .landscapeRight {
@@ -782,9 +831,8 @@ private extension SatPlayer {
                     }
                 }
             case .ended:
-                self.transform = initialTransform
                 if translation.y < 0 {
-                    if currentOrientation == .portrait {
+                    if panScale >= 1.3 && currentOrientation == .portrait {
                         let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .landscapeRight)
                         windowScene.requestGeometryUpdate(geometryPreferences) { error in
                             debugPrint("Error updating geometry: \(error.localizedDescription)")
@@ -798,6 +846,7 @@ private extension SatPlayer {
                         }
                     }
                 }
+                self.transform = initialTransform
             default:
                 break
             }

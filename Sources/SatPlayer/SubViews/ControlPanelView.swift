@@ -109,6 +109,21 @@ class ControlPanelView: UIView {
         .font(.systemFont(ofSize: 12))
         .textColor(.white)
     
+    private lazy var lbSlash = UILabel()
+        .text("/")
+        .font(.systemFont(ofSize: 12))
+        .textColor(.white)
+    
+    private lazy var lbTotalDuration = UILabel()
+        .text("--:--")
+        .font(.systemFont(ofSize: 12))
+        .textColor(.white)
+    
+    private lazy var durationStack = UIStackView(arrangedSubviews: [lbCurrentDuration, lbSlash, lbTotalDuration])
+        .axis(.horizontal)
+        .spacing(2)
+        .alignment(.center)
+    
     lazy var sliderCoverView = UIView()
         .backgroundColor(.clear)
     
@@ -122,20 +137,15 @@ class ControlPanelView: UIView {
         sb.addTarget(self, action: #selector(handleSliderValueChange(_:)), for: .valueChanged)
         return sb
     }()
-    
-    private lazy var lbTotalDuration = UILabel()
-        .text("--:--")
-        .font(.systemFont(ofSize: 12))
-        .textColor(.white)
-    
-    private lazy var progressStack = UIStackView(arrangedSubviews: [lbCurrentDuration, sliderBar, lbTotalDuration])
-        .axis(.horizontal)
-        .spacing(6)
-        .alignment(.center)
-    
+
     lazy var btnFullScreen = UIButton()
         .image(loadImage(named: "fullScreen")!.withRenderingMode(.alwaysTemplate), for: .normal)
         .tintColor(.white)
+    
+    private lazy var progressStack = UIStackView(arrangedSubviews: [sliderBar, btnFullScreen])
+        .axis(.horizontal)
+        .spacing(12)
+        .alignment(.center)
     // footer
     
     // MARK: - Lifecycle
@@ -164,7 +174,11 @@ class ControlPanelView: UIView {
     
     func updatePlayerTime(currentTimeInSecond: Float64, durationTimeInSecond: Float64) {
         sliderBar.value = Float(currentTimeInSecond / durationTimeInSecond)
-        lbCurrentDuration.text = "\(Int(currentTimeInSecond).secondToMS())"
+        if currentTimeInSecond >= 3600 {
+            lbCurrentDuration.text = "\(Int(currentTimeInSecond).secondToHMS())"
+        } else{
+            lbCurrentDuration.text = "\(Int(currentTimeInSecond).secondToMS())"
+        }
     }
     
     func updateBufferProgress(bufferProgress: Float) {
@@ -219,22 +233,24 @@ private extension ControlPanelView {
         // Control Button
 
         // Footer
-        addSubview(btnFullScreen)
+        addSubview(durationStack)
         addSubview(progressStack)
         addSubview(sliderCoverView)
 
         btnFullScreen.snp.makeConstraints({
-            $0.bottom.right.equalToSuperview().inset(12)
+            $0.size.equalTo(24)
         })
         progressStack.snp.makeConstraints({
-            $0.centerY.equalTo(btnFullScreen.snp.centerY)
-            $0.left.equalToSuperview().inset(12)
-            $0.right.equalTo(btnFullScreen.snp.left).offset(-12)
+            $0.left.bottom.right.equalToSuperview().inset(12)
         })
         sliderCoverView.snp.makeConstraints({
-            $0.left.right.equalTo(progressStack)
+            $0.left.right.equalTo(sliderBar)
             $0.centerY.equalTo(progressStack)
             $0.height.equalTo(40)
+        })
+        durationStack.snp.makeConstraints({
+            $0.bottom.equalTo(progressStack.snp.top).offset(-2)
+            $0.left.equalToSuperview().inset(12)
         })
         // Footer
     }
@@ -252,13 +268,17 @@ private extension ControlPanelView {
                     $0.left.equalToSuperview().inset(12)
                     $0.centerY.equalTo(self.btnSetting.snp.centerY)
                 })
-                btnFullScreen.snp.remakeConstraints({
-                    $0.bottom.right.equalToSuperview().inset(12)
-                })
                 progressStack.snp.remakeConstraints({
-                    $0.centerY.equalTo(self.btnFullScreen.snp.centerY)
+                    $0.left.bottom.right.equalToSuperview().inset(12)
+                })
+                sliderCoverView.snp.remakeConstraints({
+                    $0.left.right.equalTo(self.sliderBar)
+                    $0.centerY.equalTo(self.progressStack)
+                    $0.height.equalTo(40)
+                })
+                durationStack.snp.remakeConstraints({
+                    $0.bottom.equalTo(self.progressStack.snp.top).offset(-2)
                     $0.left.equalToSuperview().inset(12)
-                    $0.right.equalTo(self.btnFullScreen.snp.left).offset(-12)
                 })
                 btnStack.spacing = 32
             case .landscapeLeft, .landscapeRight:
@@ -271,14 +291,17 @@ private extension ControlPanelView {
                     $0.left.equalToSuperview().inset(60)
                     $0.centerY.equalTo(self.btnSetting.snp.centerY)
                 })
-                btnFullScreen.snp.remakeConstraints({
-                    $0.bottom.equalToSuperview().inset(24)
-                    $0.right.equalToSuperview().inset(60)
-                })
                 progressStack.snp.remakeConstraints({
-                    $0.centerY.equalTo(self.btnFullScreen.snp.centerY)
+                    $0.left.bottom.right.equalToSuperview().inset(60)
+                })
+                sliderCoverView.snp.remakeConstraints({
+                    $0.left.right.equalTo(self.sliderBar)
+                    $0.centerY.equalTo(self.progressStack)
+                    $0.height.equalTo(40)
+                })
+                durationStack.snp.remakeConstraints({
+                    $0.bottom.equalTo(self.progressStack.snp.top).offset(-2)
                     $0.left.equalToSuperview().inset(60)
-                    $0.right.equalTo(self.btnFullScreen.snp.left).offset(-12)
                 })
                 btnStack.spacing = 100
             default:

@@ -20,6 +20,9 @@ public struct Subtitle {
 }
 
 class WebVTTParser {
+    
+    static let shared = WebVTTParser()
+    
     func parseVTT(_ vttContent: String) -> [Subtitle] {
         var subtitles: [Subtitle] = []
         let lines = vttContent.components(separatedBy: .newlines)
@@ -63,16 +66,63 @@ class WebVTTParser {
     
     private func parseTimeInterval(_ string: String) -> TimeInterval? {
         let components = string.components(separatedBy: ":")
-        guard components.count == 2 else { return nil }
+        if components.count == 2 {
+            let minutes = Double(components[0]) ?? 0
+            let secondsComponents = components[1].components(separatedBy: ".")
+            guard secondsComponents.count == 2 else { return nil }
+            
+            let seconds = Double(secondsComponents[0]) ?? 0
+            let milliseconds = Double(secondsComponents[1]) ?? 0
+            
+            return (minutes * 60) + seconds + (milliseconds / 1000)
+        }
+        if components.count == 3 {
+            let hours = Double(components[0]) ?? 0
+            let minutes = Double(components[1]) ?? 0
+            let secondsComponents = components[2].components(separatedBy: ".")
+            guard secondsComponents.count == 2 else { return nil }
+            
+            let seconds = Double(secondsComponents[0]) ?? 0
+            let milliseconds = Double(secondsComponents[1]) ?? 0
+            
+            return (hours * 3600) + (minutes * 60) + seconds + (milliseconds / 1000)
+        }
         
-        let minutes = Double(components[0]) ?? 0
-        let secondsComponents = components[1].components(separatedBy: ".")
-        guard secondsComponents.count == 2 else { return nil }
-        
-        let seconds = Double(secondsComponents[0]) ?? 0
-        let milliseconds = Double(secondsComponents[1]) ?? 0
-        
-        return (minutes * 60) + seconds + (milliseconds / 1000)
+        return nil
     }
 }
 
+extension WebVTTParser {
+    // 讀取 VTT 檔案
+    func loadAndParseSubtitles(from urlString: String, completion: @escaping ([Subtitle]) -> Void) {
+        guard let url = URL(string: urlString) else { return }
+        if url.scheme == "file" {
+            // 離線播放，讀取本地字幕
+            do {
+                let data = try String(contentsOf: URL(string: urlString)!)
+                let parser = WebVTTParser()
+                completion(parser.parseVTT(data))
+            } catch {
+                print("Failed to load subtitles: \(error)")
+            }
+        } else {
+            URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+                guard let self = self else { return }
+                if let error = error {
+                    print("Failed to load subtitles: \(error)")
+                    return
+                }
+
+                guard let data = data, let content = String(data: data, encoding: .utf8) else { return }
+                let parser = WebVTTParser()
+                completion(parser.parseVTT(content))
+            }.resume()
+        }
+    }
+    
+    // 依照播放進度更新字幕
+    func updateSubtitles(for currentTime: TimeInterval, subtitles: [Subtitle]) -> String {
+        let currentSubtitle = subtitles.first { currentTime >= $0.startTime && currentTime <= $0.endTime }
+        return currentSubtitle?.text ?? ""
+    }
+}
