@@ -17,6 +17,8 @@ public protocol SatPlayerDelegate: AnyObject {
     func setting()
     /// 結束播放
     func playFinish()
+    /// 重頭播放
+    func replay()
 }
 
 public class SatPlayer: UIView {
@@ -45,6 +47,9 @@ public class SatPlayer: UIView {
     private var defaultSubtitle: String?
     private var subtitles = [Subtitle]()
     private var nowPlayingHelper = NowPlayingHelper()
+    
+    // 防止播放結束事件重複發送
+    private var isFinish = Bool()
     
     // Player Observer
     private var timeObserver: Any? = nil
@@ -176,6 +181,7 @@ public class SatPlayer: UIView {
      */
     public func initVideoPlayer(config: PlayerConfiguration) {
         self.defaultSeekTime = config.defaultSeekTime
+        self.isFinish = false
         // 設定影片名稱
         controlPanel.setVideoTitle(config.videoTitle)
         // 設定影片
@@ -351,6 +357,18 @@ public class SatPlayer: UIView {
         let newTime = CMTime(seconds: 0.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         self.viewModel.seekTime.accept(newTime)
         viewModel.playStatus.accept(.play)
+        self.isFinish = false
+    }
+    
+    /// 顯示自動播放倒數計時
+    public func showNextView() {
+        viewModel.isControlHidden.accept(false)
+        controlPanel.presentNextView()
+    }
+    
+    /// 移除自動播放倒數計時
+    public func resetNextView() {
+        controlPanel.removeNextView()
     }
 }
 
@@ -529,6 +547,18 @@ private extension SatPlayer {
             guard let self = self else { return }
             self.delegate?.nextTrack()
         }).disposed(by: disposeBag)
+        
+        controlPanel.playNextCallback = {
+            self.cleanPlayerData()
+            self.delegate?.nextTrack()
+            self.viewModel.isControlHidden.accept(true)
+        }
+        
+        controlPanel.replayCallback = {
+            self.replayVideo()
+            self.viewModel.isControlHidden.accept(true)
+            self.delegate?.replay()
+        }
     }
     
     // Configure Tap Gesture
@@ -592,7 +622,8 @@ private extension SatPlayer {
 
         // 監聽是否播放完畢
         if durationTimeInSecond.isFinite {
-            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) {
+            if Int(currentTimeInSecond) >= Int(durationTimeInSecond) && !isFinish {
+                isFinish = true
                 delegate?.playFinish()
             }
         }
@@ -732,6 +763,7 @@ private extension SatPlayer {
         // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
         playerLayer.player = player
         speedSetting(rate: self.defaultSpeed)
+        setPlayStatue(.play)
     }
     
     // Player 控制面板顯示 / 消失
@@ -970,6 +1002,9 @@ private extension SatPlayer {
 
 private extension SatPlayer {
     func startInactivityTimer() {
+        if isFinish {
+            return
+        }
         // 如果计时器已经存在，先取消
         inactivityTimer?.invalidate()
         

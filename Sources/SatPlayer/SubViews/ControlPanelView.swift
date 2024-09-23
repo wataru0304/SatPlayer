@@ -46,6 +46,9 @@ class ControlPanelView: UIView {
         return btnFullScreen.rx.tap
     }
     
+    var replayCallback: (() -> Void)?
+    var playNextCallback: (() -> Void)?
+    
     // MARK: - SubViews
     // header
     private lazy var lbTitle = UILabel()
@@ -101,6 +104,8 @@ class ControlPanelView: UIView {
         .axis(.horizontal)
         .spacing(32)
         .alignment(.center)
+    
+    private var nextView: PlayNextView?
     // Control Button
     
     // footer
@@ -194,6 +199,45 @@ class ControlPanelView: UIView {
             self.btnPlay.isHidden = false
             self.btnPause.isHidden = true
         }
+    }
+    
+    /// 顯示自動下一首元件
+    func presentNextView() {
+        btnStack.isHidden = true
+
+        let view = PlayNextView()
+        nextView = view
+        
+        view.replayHandler = { [weak self] in
+            guard let self = self else { return }
+            view.removeFromSuperview()
+            self.btnStack.isHidden = false
+            self.replayCallback?()
+            nextView = nil
+        }
+
+        view.playHandler = { [weak self] in
+            guard let self = self else { return }
+            view.removeFromSuperview()
+            self.btnStack.isHidden = false
+            self.playNextCallback?()
+            nextView = nil
+        }
+
+        addSubview(view)
+        view.snp.makeConstraints({
+            $0.center.equalToSuperview()
+        })
+    }
+    
+    /// 移除自動下一首元件
+    func removeNextView() {
+        if let nextView = nextView {
+            nextView.stopTimer()
+            nextView.removeFromSuperview()
+            self.nextView = nil
+        }
+        btnStack.isHidden = false
     }
 }
 
