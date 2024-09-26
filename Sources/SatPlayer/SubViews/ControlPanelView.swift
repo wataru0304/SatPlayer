@@ -327,7 +327,7 @@ private extension ControlPanelView {
                 btnStack.spacing = 32
             case .landscapeLeft, .landscapeRight:
                 btnSetting.snp.remakeConstraints({
-                    $0.top.equalToSuperview().inset(20)
+                    $0.top.equalToSuperview().inset(UIDevice.current.userInterfaceIdiom == .phone ? 20 : 36)
                     $0.right.equalToSuperview().inset(60)
                 })
                 lbTitle.snp.remakeConstraints({
