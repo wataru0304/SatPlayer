@@ -10,7 +10,7 @@ import UIKit
 class PlayerTexttrackView: UIView {
     
     private lazy var lbSubtitle = UILabel()
-        .font(.systemFont(ofSize: 16))
+        .font(.systemFont(ofSize: UIDevice.current.userInterfaceIdiom == .phone ? 16 : 30))
         .textColor(.white)
         .textAlignment(.center)
         .numberOfLines(0)
