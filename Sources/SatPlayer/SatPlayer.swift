@@ -412,7 +412,7 @@ private extension SatPlayer {
         })
         
         subtitleView.snp.makeConstraints({
-            $0.bottom.equalToSuperview().inset(24)
+            $0.bottom.equalToSuperview().inset(UIDevice.current.userInterfaceIdiom == .phone ? 24 : 48)
             $0.centerX.equalToSuperview()
         })
         
