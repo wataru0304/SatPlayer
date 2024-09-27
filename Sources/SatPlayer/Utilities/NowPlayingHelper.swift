@@ -42,10 +42,10 @@ class NowPlayingHelper {
         nowPlayingInfo = [:]
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         
-//        commandCenter.playCommand.removeTarget(nil)
-//        commandCenter.pauseCommand.removeTarget(nil)
-//        commandCenter.nextTrackCommand.removeTarget(nil)
-//        commandCenter.previousTrackCommand.removeTarget(nil)
+        commandCenter.playCommand.removeTarget(nil)
+        commandCenter.pauseCommand.removeTarget(nil)
+        commandCenter.nextTrackCommand.removeTarget(nil)
+        commandCenter.previousTrackCommand.removeTarget(nil)
         commandCenter.changePlaybackPositionCommand.removeTarget(nil)
     }
     
@@ -61,8 +61,7 @@ class NowPlayingHelper {
                 return videoImage
             }
         }
-        
-        
+
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
     

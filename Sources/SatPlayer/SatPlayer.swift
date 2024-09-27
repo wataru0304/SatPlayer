@@ -73,6 +73,14 @@ public class SatPlayer: UIView {
     private var fastForwardCount = 1
     private var fastReverseCount = 1
     
+    // 子母畫面控制器
+    private var pipController: AVPictureInPictureController?
+    
+    /// 判斷當前是否啟用 picture-in-picture 模式
+    /// 進入背景時 = true，回到前景時 = false
+    /// 於 applicationDidEnterBackground & applicationWillEnterForeground selector 中切換
+    private var wasInPipMode = Bool()
+    
     // MARK: - SubViews
     private lazy var loadingView: UIActivityIndicatorView = {
         let ai = UIActivityIndicatorView(style: .medium)
@@ -222,11 +230,26 @@ public class SatPlayer: UIView {
         playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
         playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
         
-        player = AVPlayer(playerItem: playerItem)
-        player?.replaceCurrentItem(with: playerItem)
-        playerLayer.player = player
-        layer.insertSublayer(playerLayer, at: 0)
-
+        // 判斷是否為初始化狀態
+        if let existingPlayer = player {
+            existingPlayer.replaceCurrentItem(with: playerItem)
+            setPlayStatue(.play)
+            // 如果之前在 PiP 模式，嘗試恢復
+            if wasInPipMode {
+                pipController?.startPictureInPicture()
+            }
+        } else {
+            player = AVPlayer(playerItem: playerItem)
+            player?.replaceCurrentItem(with: playerItem)
+            playerLayer.player = player
+            layer.insertSublayer(playerLayer, at: 0)
+            
+            if AVPictureInPictureController.isPictureInPictureSupported() {
+                pipController = AVPictureInPictureController(playerLayer: playerLayer)
+                pipController?.delegate = self
+            }
+        }
+        
         // 判斷當前螢幕方向
         configurePlayerLayout(.portrait)
         setObserverToPlayer()
@@ -291,16 +314,7 @@ public class SatPlayer: UIView {
         player.pause()
         player.replaceCurrentItem(with: nil)
         
-        // 清除 timer 監聽
-        if let _ = self.timeObserver {
-            player.removeTimeObserver(self.timeObserver as Any)
-            self.timeObserver = nil
-        }
-        
-        if let _ = self.subTitleObserver {
-            player.removeTimeObserver(self.subTitleObserver as Any)
-            self.subTitleObserver = nil
-        }
+        cleanObserverData()
         
         viewModel.isControlHidden.accept(true)
         viewModel.seekTime.accept(CMTime())
@@ -313,6 +327,22 @@ public class SatPlayer: UIView {
         self.playerItem = nil
         self.playerLayer.player = nil
         self.player = nil
+    }
+    
+    /// Clean the observer of  player current duration observer and the observer of subtitle control
+    public func cleanObserverData() {
+        guard let player = player else { return }
+        
+        // 清除 timer 監聽
+        if let _ = self.timeObserver {
+            player.removeTimeObserver(self.timeObserver as Any)
+            self.timeObserver = nil
+        }
+        
+        if let _ = self.subTitleObserver {
+            player.removeTimeObserver(self.subTitleObserver as Any)
+            self.subTitleObserver = nil
+        }
     }
     
     /// 清除 nowPlaying data
@@ -549,7 +579,6 @@ private extension SatPlayer {
         }).disposed(by: disposeBag)
         
         controlPanel.playNextCallback = {
-            self.cleanPlayerData()
             self.delegate?.nextTrack()
             self.viewModel.isControlHidden.accept(true)
         }
@@ -678,10 +707,25 @@ private extension SatPlayer {
             playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
             playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
             
-            player = AVPlayer(playerItem: playerItem)
-            player?.replaceCurrentItem(with: playerItem)
-            playerLayer.player = player
-            layer.insertSublayer(playerLayer, at: 0)
+            // 判斷是否為初始化狀態
+            if let existingPlayer = player {
+                existingPlayer.replaceCurrentItem(with: playerItem)
+                setPlayStatue(.play)
+                // 如果之前在 PiP 模式，嘗試恢復
+                if wasInPipMode {
+                    pipController?.startPictureInPicture()
+                }
+            } else {
+                player = AVPlayer(playerItem: playerItem)
+                player?.replaceCurrentItem(with: playerItem)
+                playerLayer.player = player
+                layer.insertSublayer(playerLayer, at: 0)
+                
+                if AVPictureInPictureController.isPictureInPictureSupported() {
+                    pipController = AVPictureInPictureController(playerLayer: playerLayer)
+                    pipController?.delegate = self
+                }
+            }
 
             // 判斷當前螢幕方向
             configurePlayerLayout(.portrait)
@@ -756,14 +800,18 @@ private extension SatPlayer {
 private extension SatPlayer {
     @objc func applicationDidEnterBackground() {
         // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
-        playerLayer.player = nil
+//        playerLayer.player = nil
+        startPiP()
+        wasInPipMode = true
     }
 
     @objc func applicationWillEnterForeground() {
         // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
-        playerLayer.player = player
+//        playerLayer.player = player
+        stopPiP()
         speedSetting(rate: self.defaultSpeed)
         setPlayStatue(.play)
+        wasInPipMode = false
     }
     
     // Player 控制面板顯示 / 消失
@@ -1017,6 +1065,27 @@ private extension SatPlayer {
     }
 }
 
+// MARK: - PIP Private Helpers
+private extension SatPlayer {
+    /// 啟用子母畫面
+    func startPiP() {
+        guard let pipController = pipController, AVPictureInPictureController.isPictureInPictureSupported() else {
+            print("DEBUG: 不支援 PIP")
+            return
+        }
+
+        if !pipController.isPictureInPictureActive {
+            pipController.startPictureInPicture()
+        }
+    }
+
+    /// 停用子母畫面
+    func stopPiP() {
+        guard let pipController = pipController, pipController.isPictureInPictureActive else { return }
+        pipController.stopPictureInPicture()
+    }
+}
+
 extension SatPlayer: UIGestureRecognizerDelegate {
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         // 檢查觸摸是否發生在按鈕上
@@ -1057,5 +1126,20 @@ extension SatPlayer: NowPlayingHelperDelegate {
     
     func previousTrack() {
         playPrevious()
+    }
+}
+
+// MARK: - AVPictureInPictureControllerDelegate
+extension SatPlayer: AVPictureInPictureControllerDelegate {
+    // 監聽啟用 picture-in-pictrue 事件
+    public func pictureInPictureControllerWillStartPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        // 如果需要啟用 hls 字幕，再把底下那行打開
+//        self.setAirPlaySubtitle(show: true)
+    }
+    
+    // 監聽停用 picture-in-pictrue 事件
+    public func pictureInPictureControllerDidStopPictureInPicture(_ pictureInPictureController: AVPictureInPictureController) {
+        // 如果需要移除 hls 字幕，再把底下那行打開
+//        self.setAirPlaySubtitle(show: false)
     }
 }
