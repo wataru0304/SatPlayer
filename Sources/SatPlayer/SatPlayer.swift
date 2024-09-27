@@ -121,6 +121,7 @@ public class SatPlayer: UIView {
     
     deinit {
         NotificationCenter.default.removeObserver(self, name: AVAudioSession.routeChangeNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: AVAudioSession.interruptionNotification, object: nil)
     }
     
     // MARK: - Lifecycle
@@ -139,6 +140,9 @@ public class SatPlayer: UIView {
         
         // 監聽 AirPlay 切換事件
         NotificationCenter.default.addObserver(self, selector: #selector(handleRouteChange(_:)), name: AVAudioSession.routeChangeNotification, object: nil)
+        
+        // 監聽 AudioSession 搶佔事件
+        NotificationCenter.default.addObserver(self, selector: #selector(handleAudioSessionInterruption), name: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance())
         nowPlayingHelper.setupRemoteTransportControls()
     }
     
@@ -798,6 +802,25 @@ private extension SatPlayer {
 
 // MARK: - Selectors
 private extension SatPlayer {
+    // 監聽 AudioSession 搶佔事件
+    @objc func handleAudioSessionInterruption(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let interruptionTypeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let interruptionType = AVAudioSession.InterruptionType(rawValue: interruptionTypeValue) else {
+            return
+        }
+        
+        switch interruptionType {
+        case .began:
+            // Audio Session 中斷
+            setPlayStatue(.pause)
+        case .ended:
+            // 中斷恢復
+            setPlayStatue(.play)
+        default:
+            break
+        }
+    }
     @objc func applicationDidEnterBackground() {
         // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
 //        playerLayer.player = nil
