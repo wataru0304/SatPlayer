@@ -204,7 +204,9 @@ class ControlPanelView: UIView {
     /// 顯示自動下一首元件
     func presentNextView() {
         btnStack.isHidden = true
-
+        btnSetting.isHidden = true
+        btnAirplay.isHidden = true
+        
         let view = PlayNextView()
         nextView = view
         
@@ -212,6 +214,8 @@ class ControlPanelView: UIView {
             guard let self = self else { return }
             view.removeFromSuperview()
             self.btnStack.isHidden = false
+            self.btnSetting.isHidden = false
+            self.btnAirplay.isHidden = false
             self.replayCallback?()
             nextView = nil
         }
@@ -220,6 +224,8 @@ class ControlPanelView: UIView {
             guard let self = self else { return }
             view.removeFromSuperview()
             self.btnStack.isHidden = false
+            self.btnSetting.isHidden = false
+            self.btnAirplay.isHidden = false
             self.playNextCallback?()
             nextView = nil
         }
