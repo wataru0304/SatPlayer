@@ -396,8 +396,12 @@ public class SatPlayer: UIView {
     
     /// 顯示自動播放倒數計時
     public func showNextView() {
-        viewModel.isControlHidden.accept(false)
-        controlPanel.presentNextView()
+        if wasInPipMode {
+            delegate?.nextTrack()
+        } else {
+            viewModel.isControlHidden.accept(false)
+            controlPanel.presentNextView()
+        }
     }
     
     /// 移除自動播放倒數計時
@@ -864,6 +868,11 @@ private extension SatPlayer {
             return
         }
         
+        // 如果當前為播放結束狀態則不執行點擊動作
+        if isFinish {
+            return
+        }
+        
         // 處理單擊 / 雙擊衝突延遲問題
         tapCount += 1
         if tapCount == 1 {
@@ -873,6 +882,10 @@ private extension SatPlayer {
     
     // 雙擊快轉 / 倒轉
     @objc func handleDoubleTap(_ sender: UITapGestureRecognizer) {
+        // 如果當前為播放結束狀態則不執行雙擊動作
+        if isFinish {
+            return
+        }
         // 處理單擊 / 雙擊衝突延遲問題
         tapCount = 0
         tapTimer?.invalidate()
@@ -937,11 +950,19 @@ private extension SatPlayer {
     
     // 長按拖曳 Slider Bar
     @objc func handleViewLongPress(_ sender: UILongPressGestureRecognizer) {
+        // 如果當前為播放結束狀態則不執行拖曳動作
+        if isFinish {
+            return
+        }
         longPressHandler(sender: sender, setHapticFeedback: true)
     }
     
     // 設定 Slider Bar 長按拖曳
     @objc func handleSliderLongPress(_ sender: UILongPressGestureRecognizer) {
+        // 如果當前為播放結束狀態則不執行拖曳動作
+        if isFinish {
+            return
+        }
         longPressHandler(sender: sender, setHapticFeedback: false)
     }
     
