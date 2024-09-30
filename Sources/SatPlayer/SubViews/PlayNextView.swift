@@ -12,7 +12,7 @@ class PlayNextView: UIView {
     // MARK: - Properties
     var timeLeftShapeLayer = CAShapeLayer()
     var bgShapeLayer = CAShapeLayer()
-    var timeLeft: TimeInterval = 3
+    var timeLeft: TimeInterval = 6
     var endTime: Date?
     var timer = Timer()
     let strokeIt = CABasicAnimation(keyPath: "strokeEnd")
@@ -67,7 +67,7 @@ class PlayNextView: UIView {
         drawTimeLeftShape()
         strokeIt.fromValue = 0
         strokeIt.toValue = 1
-        strokeIt.duration = 3
+        strokeIt.duration = 6
         timeLeftShapeLayer.add(strokeIt, forKey: nil)
         endTime = Date().addingTimeInterval(timeLeft)
         
