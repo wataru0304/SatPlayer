@@ -24,9 +24,11 @@ class BufferSlider: UISlider {
         super.draw(rect)
         guard let context = UIGraphicsGetCurrentContext() else { return }
         let bufferWidth = CGFloat(bufferProgress) * rect.width
-        let bufferRect = CGRect(x: rect.origin.x + 4, y: rect.height / 2 - 2, width: bufferWidth, height: 4)
+        let bufferRect = CGRect(x: rect.origin.x + 4, y: rect.height / 2 - 2, width: bufferWidth - 6, height: 4)
         
+        let path = UIBezierPath(roundedRect: bufferRect, cornerRadius: 2)
         context.setFillColor(UIColor.lightGray.cgColor)
-        context.fill(bufferRect)
+        context.addPath(path.cgPath)
+        context.fillPath()
     }
 }
