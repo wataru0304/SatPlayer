@@ -346,6 +346,7 @@ public class SatPlayer: UIView {
         if let _ = self.subTitleObserver {
             player.removeTimeObserver(self.subTitleObserver as Any)
             self.subTitleObserver = nil
+            self.configureTextTrack(vttUrl: nil)
         }
     }
     
@@ -397,6 +398,8 @@ public class SatPlayer: UIView {
     /// 顯示自動播放倒數計時
     public func showNextView() {
         if wasInPipMode {
+            configureTextTrack(vttUrl: nil)
+            setPlayStatue(.pause)
             delegate?.nextTrack()
         } else {
             viewModel.isControlHidden.accept(false)
@@ -583,10 +586,14 @@ private extension SatPlayer {
 
         controlPanel.nextTapped.subscribe(onNext: { [weak self] _ in
             guard let self = self else { return }
-            self.delegate?.nextTrack()
+            configureTextTrack(vttUrl: nil)
+            setPlayStatue(.pause)
+            delegate?.nextTrack()
         }).disposed(by: disposeBag)
         
         controlPanel.playNextCallback = {
+            self.configureTextTrack(vttUrl: nil)
+            self.setPlayStatue(.pause)
             self.delegate?.nextTrack()
             self.viewModel.isControlHidden.accept(true)
         }
@@ -1178,6 +1185,9 @@ extension SatPlayer: NowPlayingHelperDelegate {
     }
     
     func nextTrack() {
+        controlPanelHidden(true)
+        configureTextTrack(vttUrl: nil)
+        setPlayStatue(.pause)
         delegate?.nextTrack()
     }
     
