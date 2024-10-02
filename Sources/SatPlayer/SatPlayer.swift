@@ -686,10 +686,23 @@ private extension SatPlayer {
     
     // 快 / 倒轉點擊
     func timeJumpHelper(type: TimeJumpType) {
-        guard let currentTime = self.player?.currentTime() else { return }
-        let seekTime10Sec = CMTimeGetSeconds(currentTime).advanced(by: type == .forward ? 10 : -10)
-        let seekTime = CMTime(value: CMTimeValue(seekTime10Sec), timescale: 1)
-        self.viewModel.seekTime.accept(seekTime)
+        guard let player = player else { return }
+        let currentTime = player.currentTime()
+
+        switch type {
+        case .forward:
+            if let currentItem = player.currentItem {
+                let duration = currentItem.duration
+                let remainingTime = CMTimeGetSeconds(duration) - CMTimeGetSeconds(currentTime)
+                let actralForwardTime = min(10, remainingTime)
+                let newTime = CMTimeAdd(currentTime, CMTime(seconds: actralForwardTime, preferredTimescale: 1))
+                self.viewModel.seekTime.accept(newTime)
+            }
+        case .reverse:
+            let seekTime10Sec = CMTimeGetSeconds(currentTime).advanced(by: -10)
+            let seekTime = CMTime(value: CMTimeValue(seekTime10Sec), timescale: 1)
+            self.viewModel.seekTime.accept(seekTime)
+        }
     }
     
     // 播放上一首
@@ -870,6 +883,7 @@ private extension SatPlayer {
         
         // 如果當前為播放結束狀態則不執行點擊動作
         if isFinish {
+            tapTimer?.invalidate()
             return
         }
         
@@ -1095,12 +1109,11 @@ private extension SatPlayer {
 private extension SatPlayer {
     func startInactivityTimer() {
         if isFinish {
+            inactivityTimer?.invalidate()
             return
         }
-        // 如果计时器已经存在，先取消
-        inactivityTimer?.invalidate()
         
-        // 创建新的计时器
+        inactivityTimer?.invalidate()
         inactivityTimer = Timer.scheduledTimer(timeInterval: inactivityInterval, target: self, selector: #selector(inactivityTimerFired), userInfo: nil, repeats: false)
     }
     
