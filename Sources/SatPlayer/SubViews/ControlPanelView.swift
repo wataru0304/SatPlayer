@@ -244,6 +244,8 @@ class ControlPanelView: UIView {
             self.nextView = nil
         }
         btnStack.isHidden = false
+        btnSetting.isHidden = false
+        btnAirplay.isHidden = false
     }
 }
 
