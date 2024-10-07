@@ -846,15 +846,13 @@ private extension SatPlayer {
         }
     }
     @objc func applicationDidEnterBackground() {
-        // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
-//        playerLayer.player = nil
         startPiP()
         wasInPipMode = true
     }
 
     @objc func applicationWillEnterForeground() {
         // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
-//        playerLayer.player = player
+        playerLayer.player = player
         stopPiP()
         speedSetting(rate: self.defaultSpeed)
         setPlayStatue(.play)
@@ -1139,6 +1137,8 @@ private extension SatPlayer {
         }
 
         if !pipController.isPictureInPictureActive {
+            // 解決：進入背景時 Media center 會與 AVPlayLayer 中的 Player 衝突，導致背景播放中斷問題
+            playerLayer.player = nil
             pipController.startPictureInPicture()
         }
     }
