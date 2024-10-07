@@ -323,9 +323,6 @@ public class SatPlayer: UIView {
         viewModel.isControlHidden.accept(true)
         viewModel.seekTime.accept(CMTime())
         viewModel.vttUrl.accept(nil)
-        
-        playerItem!.removeObserver(self, forKeyPath: "status")
-        playerItem!.removeObserver(self, forKeyPath: "loadedTimeRanges")
 
         // 清除 player data
         self.playerItem = nil
@@ -335,6 +332,11 @@ public class SatPlayer: UIView {
     
     /// Clean the observer of  player current duration observer and the observer of subtitle control
     public func cleanObserverData() {
+        if let item = playerItem {
+            item.removeObserver(self, forKeyPath: "status", context: nil)
+            item.removeObserver(self, forKeyPath: "loadedTimeRanges", context: nil)
+        }
+        
         guard let player = player else { return }
         
         // 清除 timer 監聽
