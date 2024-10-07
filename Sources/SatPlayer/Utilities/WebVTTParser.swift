@@ -31,6 +31,12 @@ class WebVTTParser {
         var currentText: String = ""
 
         for line in lines {
+            // 忽略可能的數字編號行（兩種格式兼容）
+            if let _ = Int(line) {
+                // 是數字的話跳過，因為編號行在某些格式存在
+                continue
+            }
+            
             if line.contains("-->") {
                 let times = line.components(separatedBy: " --> ")
                 if times.count == 2 {
