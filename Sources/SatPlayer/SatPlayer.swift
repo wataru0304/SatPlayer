@@ -1145,8 +1145,12 @@ private extension SatPlayer {
 
     /// 停用子母畫面
     func stopPiP() {
-        guard let pipController = pipController, pipController.isPictureInPictureActive else { return }
-        pipController.stopPictureInPicture()
+        guard let pipController = pipController else { return }
+        if pipController.isPictureInPictureActive {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                pipController.stopPictureInPicture()
+            }
+        }
     }
 }
 
