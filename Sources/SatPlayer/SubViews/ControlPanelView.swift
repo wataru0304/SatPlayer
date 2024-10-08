@@ -74,7 +74,7 @@ class ControlPanelView: UIView {
         let btn = UIButton()
             .image(loadImage(named: "previous-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
-        btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        btn.contentEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         return btn
     }()
 
@@ -96,7 +96,7 @@ class ControlPanelView: UIView {
         let btn = UIButton()
             .image(loadImage(named: "next-icon")!.withRenderingMode(.alwaysTemplate), for: .normal)
             .tintColor(.white)
-        btn.contentEdgeInsets = UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        btn.contentEdgeInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         return btn
     }()
     
