@@ -81,6 +81,9 @@ public class SatPlayer: UIView {
     /// 於 applicationDidEnterBackground & applicationWillEnterForeground selector 中切換
     private var wasInPipMode = Bool()
     
+    /// 管理 playerItem 監聽器是否存在
+    private var isObserverExist = Bool()
+    
     // MARK: - SubViews
     private lazy var loadingView: UIActivityIndicatorView = {
         let ai = UIActivityIndicatorView(style: .medium)
@@ -234,6 +237,8 @@ public class SatPlayer: UIView {
         playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
         playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
         
+        isObserverExist = true
+        
         // 判斷是否為初始化狀態
         if let existingPlayer = player {
             existingPlayer.replaceCurrentItem(with: playerItem)
@@ -332,9 +337,10 @@ public class SatPlayer: UIView {
     
     /// Clean the observer of  player current duration observer and the observer of subtitle control
     public func cleanObserverData() {
-        if let item = playerItem {
+        if let item = playerItem, isObserverExist {
             item.removeObserver(self, forKeyPath: "status", context: nil)
             item.removeObserver(self, forKeyPath: "loadedTimeRanges", context: nil)
+            isObserverExist = false
         }
         
         guard let player = player else { return }
@@ -736,6 +742,8 @@ private extension SatPlayer {
             
             playerItem!.addObserver(self, forKeyPath: "loadedTimeRanges", options: [.new, .initial], context: nil)
             playerItem!.addObserver(self, forKeyPath: "status", options: [.new, .initial], context: nil)
+            
+            isObserverExist = true
             
             // 判斷是否為初始化狀態
             if let existingPlayer = player {
