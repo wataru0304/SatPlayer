@@ -54,7 +54,7 @@ class WebVTTParser {
                 currentEndTime = nil
                 currentText = ""
             } else {
-                currentText += line + "\n"
+                currentText += line
             }
         }
 
