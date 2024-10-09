@@ -35,7 +35,20 @@ class PlayerTexttrackView: UIView {
         // 字幕為空要隱藏
         self.isHidden = subtitle.isEmpty
         
-        // 部分課程字幕因不明原因，會出現 <b>, </b> 標籤，因此需手動排除不明標籤
-        lbSubtitle.text = subtitle.replacingOccurrences(of: "<b>", with: "").replacingOccurrences(of: "</b>", with: "")
+        // 過濾 html 標籤
+        lbSubtitle.text = replaceHTMLTag(value: subtitle)
+    }
+    
+    func replaceHTMLTag(value: String) -> String {
+        if let data = value.data(using: .utf8) {
+            if let attributedString = try? NSAttributedString(data: data,
+                                                              options: [.documentType: NSAttributedString.DocumentType.html,
+                                                                        .characterEncoding: String.Encoding.utf8.rawValue],
+                                                              documentAttributes: nil) {
+                let plainText = attributedString.string
+                return plainText
+            }
+        }
+        return value
     }
 }
