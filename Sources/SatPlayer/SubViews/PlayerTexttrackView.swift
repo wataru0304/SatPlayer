@@ -34,11 +34,8 @@ class PlayerTexttrackView: UIView {
     func setSubtitle(_ subtitle: String) {
         // 字幕為空要隱藏
         self.isHidden = subtitle.isEmpty
-        if let rangeOfLastLine = subtitle.range(of: "\n", options: .backwards) {
-            let cleanedString = subtitle.replacingCharacters(in: rangeOfLastLine, with: "")
-            lbSubtitle.text = cleanedString
-        } else {
-            lbSubtitle.text = subtitle
-        }
+        
+        // 部分課程字幕因不明原因，會出現 <b>, </b> 標籤，因此需手動排除不明標籤
+        lbSubtitle.text = subtitle.replacingOccurrences(of: "<b>", with: "").replacingOccurrences(of: "</b>", with: "")
     }
 }
