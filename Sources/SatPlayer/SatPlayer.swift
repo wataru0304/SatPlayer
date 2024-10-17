@@ -1157,7 +1157,7 @@ private extension SatPlayer {
     func stopPiP() {
         guard let pipController = pipController else { return }
         if pipController.isPictureInPictureActive {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 pipController.stopPictureInPicture()
             }
         }
