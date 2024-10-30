@@ -286,7 +286,13 @@ public class SatPlayer: UIView {
     public func getCurrentSecond() -> Int {
         guard let currentTime = player?.currentTime() else { return 0 }
         let currentTimeInSecond = CMTimeGetSeconds(currentTime)
-        return Int(ceilf((Float(currentTimeInSecond))))
+        
+        // 檢查是否為有效數值
+        guard !currentTimeInSecond.isNaN && !currentTimeInSecond.isInfinite else {
+            return 0
+        }
+        
+        return Int(ceil(currentTimeInSecond))
     }
     
     /// 設定字幕檔案
